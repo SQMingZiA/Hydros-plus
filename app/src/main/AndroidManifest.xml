@@ -75,20 +75,6 @@
             </intent-filter>
         </activity-alias>
 
-        <activity-alias
-            android:name=".CustomIcon"
-            android:targetActivity=".MainActivity"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_custom"
-            android:roundIcon="@mipmap/ic_launcher_custom"
-            android:label="@string/app_name">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
         <!-- 智能助手入口：hydros://voice?q=... 或带 VOICE_COMMAND extra 的 Intent。 -->
         <activity
             android:name=".voice.VoiceCommandActivity"

@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.cqutosp.hydros.data.HydrosApplication
 import org.cqutosp.hydros.data.storage.AndroidAppDataControl
+import org.cqutosp.hydros.ui.state.AppIconController
 import org.cqutosp.hydros.ui.state.HydrosViewModel
 import org.cqutosp.hydros.ui.HydrosBottomBar
 import org.cqutosp.hydros.ui.HomeWalletTabs
@@ -93,6 +94,8 @@ class ScreenPreviewActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val screen = intent.getStringExtra("screen") ?: "water"
+        // 调试用：--es applyIcon QZXY|DEFAULT 可在启动预览页前切换桌面图标别名。
+        intent.getStringExtra("applyIcon")?.let { AppIconController.apply(this, it) }
         val month = YearMonth.now()
         val state = previewUiState(month = month, avatarPath = demoAvatarFile(this))
         val appData = AndroidAppDataControl(applicationContext)
@@ -400,9 +403,7 @@ class ScreenPreviewActivity : ComponentActivity() {
                     "appicon" -> HydrosPage("桌面图标", onBack = {}) {
                         AppIconScreen(
                             current = AppIconKeys.DEFAULT,
-                            hasCustom = false,
                             onSelect = {},
-                            onPickCustom = {},
                         )
                     }
                     "voice" -> HydrosPage("智能助手", onBack = {}) {

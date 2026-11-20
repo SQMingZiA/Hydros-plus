@@ -556,7 +556,6 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                     wallpaperOn = !state.wallpaperPath.isNullOrBlank(),
                                     iconLabel = when (AppIconController.currentAppIcon(context)) {
                                         "QZXY" -> "趣智校园"
-                                        "CUSTOM" -> "自定义图片"
                                         else -> "默认图标"
                                     },
                                     onOpenFont = { openPage("appearance/font") },
@@ -609,47 +608,13 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                         }
                         composable("appearance/icon") {
                             var iconKey by remember { mutableStateOf(AppIconController.currentAppIcon(context)) }
-                            var hasCustomIcon by remember { mutableStateOf(AppIconController.hasCustomIcon(context)) }
-                            var customBitmap by remember { mutableStateOf(AppIconController.customIconBitmap(context)) }
-                            val iconScope = rememberCoroutineScope()
-                            val iconPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
-                                if (picked != null) iconScope.launch {
-                                    val saved = runCatching { AppIconController.saveCustomIcon(context, picked) }.getOrNull()
-                                    hasCustomIcon = saved != null
-                                    customBitmap = AppIconController.customIconBitmap(context)
-                                    if (saved != null) {
-                                        val pinned = AppIconController.requestPinnedCustomIcon(context, "Hydros+")
-                                        iconKey = AppIconKeys.CUSTOM
-                                        snackbar.show(
-                                            if (pinned) "已请求添加带自定义图标的桌面快捷方式"
-                                            else "图片已保存，但当前桌面不支持固定快捷方式"
-                                        )
-                                    } else {
-                                        snackbar.show("无法读取这张图片，请换一张试试")
-                                    }
-                                }
-                            }
                             HydrosPage("桌面图标", onBack = { back() }) {
                                 AppIconScreen(
                                     current = iconKey,
-                                    hasCustom = hasCustomIcon,
-                                    customIcon = customBitmap,
                                     onSelect = { key ->
-                                        if (key == AppIconKeys.CUSTOM) {
-                                            val pinned = AppIconController.requestPinnedCustomIcon(context, "Hydros+")
-                                            snackbar.show(
-                                                if (pinned) "已请求添加带自定义图标的桌面快捷方式"
-                                                else if (!hasCustomIcon) "请先从相册选择一张图片"
-                                                else "当前桌面不支持固定快捷方式"
-                                            )
-                                        } else {
-                                            AppIconController.apply(context, key)
-                                            iconKey = AppIconController.currentAppIcon(context)
-                                            snackbar.show("已切换桌面图标，部分桌面需要重启应用后才刷新")
-                                        }
-                                    },
-                                    onPickCustom = {
-                                        iconPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                        AppIconController.apply(context, key)
+                                        iconKey = AppIconController.currentAppIcon(context)
+                                        snackbar.show("已切换桌面图标，部分桌面需要重启应用后才刷新")
                                     },
                                 )
                             }

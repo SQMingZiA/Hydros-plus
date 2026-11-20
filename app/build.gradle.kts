@@ -1,6 +1,7 @@
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import java.time.Instant
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.aboutlibraries)
@@ -30,11 +31,18 @@ require(!hasEnvSigning || releaseSigning.values.all { !it.isNullOrBlank() }) {
 // 卸载会清空应用数据，表现就是“升级后必须重新登录”。真实签名请通过环境变量覆盖。
 val bundledKeystore = rootProject.layout.projectDirectory.file("keystore/hydros-release.jks").asFile
 val bundledSigningReady = bundledKeystore.exists()
-val hasReleaseSigning = hasEnvSigning || bundledSigningReady
-val releaseStorePath = releaseSigning["ANDROID_KEYSTORE_PATH"] ?: bundledKeystore.absolutePath
-val releaseStorePassword = releaseSigning["ANDROID_KEYSTORE_PASSWORD"] ?: "hydros2026"
-val releaseKeyAlias = releaseSigning["ANDROID_KEY_ALIAS"] ?: "hydros"
-val releaseKeyPassword = releaseSigning["ANDROID_KEY_PASSWORD"] ?: "hydros2026"
+// 口令不写进仓库：优先环境变量，其次本地 keystore/signing.properties（已被 .gitignore 忽略）。
+val signingPropertiesFile = rootProject.layout.projectDirectory.file("keystore/signing.properties").asFile
+val signingProperties = Properties().apply {
+    if (signingPropertiesFile.exists()) signingPropertiesFile.inputStream().use { load(it) }
+}
+fun signingValue(env: String, key: String): String? =
+    releaseSigning[env]?.takeIf { it.isNotBlank() } ?: signingProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+val releaseStorePath = releaseSigning["ANDROID_KEYSTORE_PATH"]?.takeIf { it.isNotBlank() } ?: bundledKeystore.absolutePath
+val releaseStorePassword = signingValue("ANDROID_KEYSTORE_PASSWORD", "storePassword")
+val releaseKeyAlias = signingValue("ANDROID_KEY_ALIAS", "keyAlias") ?: "hydros"
+val releaseKeyPassword = signingValue("ANDROID_KEY_PASSWORD", "keyPassword")
+val hasReleaseSigning = hasEnvSigning || (bundledSigningReady && releaseStorePassword != null && releaseKeyPassword != null)
 gradle.taskGraph.whenReady {
     val packagesRelease = allTasks.any {
         it.project == project && it.name in setOf("assembleRelease", "bundleRelease", "packageRelease", "packageReleaseBundle", "signReleaseBundle")
@@ -85,9 +93,9 @@ android {
         if (hasReleaseSigning) {
             create("release") {
                 storeFile = file(releaseStorePath)
-                storePassword = releaseStorePassword
-                keyAlias = releaseKeyAlias
-                keyPassword = releaseKeyPassword
+                storePassword = releaseStorePassword!!
+                keyAlias = releaseKeyAlias!!
+                keyPassword = releaseKeyPassword!!
             }
         }
     }

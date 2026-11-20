@@ -16,11 +16,8 @@
 
 ref/
 
-# 通用签名文件不入库；本项目自用的固定签名密钥是例外，
-# 它随仓库提供，用于保证历次 release 能覆盖升级（详见 README「签名说明」）。
+# Signing material must never enter the repository.
 *.jks
 *.keystore
-!keystore/
-!keystore/hydros-release.jks
 /release-apks/
 __pycache__/
