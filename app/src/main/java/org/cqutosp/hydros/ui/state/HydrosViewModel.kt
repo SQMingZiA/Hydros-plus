@@ -41,10 +41,10 @@ data class HydrosUiState(val initializing: Boolean = true, val signedIn: Boolean
     val deviceActionError: String? = null,
     val billDetail: BillUi? = null, val billDetailSync: Map<String, BillDetailUi> = emptyMap(),
     val walletError: String? = null, val billsError: String? = null, val message: String? = null, val working: Boolean = false,
-    val postSessionDestination: PostSessionDestination = PostSessionDestination.DEVICE,
+    val postSessionDestination: PostSessionDestination = PostSessionDestination.BILL,
     val resolvingPostSessionDestination: Boolean = false, val postSessionBillId: String? = null,
     val demoMode: Boolean = false, val voiceAssistantEnabled: Boolean = false,
-    val fontFamily: String = "PINGFANG", val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
+    val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null,
     val wallpaperDim: Float = 0f, val wallpaperBlur: Float = 0f,
     /** 上次登录的账号（脱敏前的手机号），用于登录页回填，避免升级/重新登录时还要手打账号。 */
@@ -119,7 +119,7 @@ class HydrosViewModel(
                 val onboarding = graph.store.onboardingCompleted()
                 val feedback = graph.store.feedback()
                 val fontSizeScale = graph.store.fontSizeScale()
-                val postSessionDestination = runCatching { graph.store.postSessionDestination() }.getOrDefault(PostSessionDestination.DEVICE)
+                val postSessionDestination = runCatching { graph.store.postSessionDestination() }.getOrDefault(PostSessionDestination.BILL)
                 val homeConnectCardVisible = runCatching { graph.store.homeConnectCardVisible() }.getOrDefault(true)
                 val waterLimitCents = runCatching { graph.store.waterLimitCents() }.getOrNull()
                 val notified = runCatching { graph.store.waterLimitNotifiedMonth() }.getOrNull()
@@ -127,6 +127,7 @@ class HydrosViewModel(
                 val demo = runCatching { graph.store.demoMode() }.getOrDefault(false)
                 val voiceEnabled = runCatching { graph.store.voiceAssistantEnabled() }.getOrDefault(false)
                 val fontFamily = runCatching { graph.store.fontFamily() }.getOrDefault("PINGFANG")
+                val fontWeightStep = runCatching { graph.store.fontWeightStep() }.getOrDefault(0)
                 val gradientPreset = runCatching { graph.store.gradientPreset() }.getOrDefault("DEFAULT")
                 val gradientEnabled = runCatching { graph.store.gradientEnabled() }.getOrDefault(true)
                 val accentColor = runCatching { graph.store.accentColor() }.getOrNull()
@@ -138,6 +139,7 @@ class HydrosViewModel(
                     fontSizeScale=fontSizeScale, postSessionDestination=postSessionDestination,
                     homeConnectCardVisible=homeConnectCardVisible, waterLimitCents=waterLimitCents,
                     waterLimitNotifiedMonth=notified, avatarPath=avatarPath, fontFamily=fontFamily,
+                    fontWeightStep=fontWeightStep,
                     gradientPreset=gradientPreset, gradientEnabled=gradientEnabled, accentColor=accentColor,
                     wallpaperPath=wallpaperPath, wallpaperDim=wallpaperDim, wallpaperBlur=wallpaperBlur,
                     lastAccount=lastAccount,
@@ -168,7 +170,8 @@ class HydrosViewModel(
                         postSessionDestination=current.postSessionDestination,
                         homeConnectCardVisible=current.homeConnectCardVisible, waterLimitCents=current.waterLimitCents,
                         waterLimitNotifiedMonth=current.waterLimitNotifiedMonth, avatarPath=current.avatarPath,
-                        fontFamily=current.fontFamily, gradientPreset=current.gradientPreset,
+                        fontFamily=current.fontFamily, fontWeightStep=current.fontWeightStep,
+                        gradientPreset=current.gradientPreset,
                         gradientEnabled=current.gradientEnabled, accentColor=current.accentColor,
                         wallpaperPath=current.wallpaperPath, wallpaperDim=current.wallpaperDim,
                         wallpaperBlur=current.wallpaperBlur, lastAccount=current.lastAccount,
@@ -359,6 +362,12 @@ class HydrosViewModel(
     fun fontFamily(value: String) { graph.scope.launch { action {
         mutable.update { it.copy(fontFamily = value) }
         graph.store.fontFamily(value)
+    } } }
+    /** 字体粗细档位：0 为设计稿原始字重，+1/+2 逐级加粗，-1 变细。 */
+    fun fontWeightStep(step: Int) { graph.scope.launch { action {
+        val clamped = step.coerceIn(-1, 2)
+        mutable.update { it.copy(fontWeightStep = clamped) }
+        graph.store.fontWeightStep(clamped)
     } } }
     /** 首页渐变背景预设，见 GradientPreset。 */
     fun gradientPreset(value: String) { graph.scope.launch { action {

@@ -9,7 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
@@ -148,9 +147,11 @@ fun HomeScreen(
                 Spacer(Modifier.height(14.dp))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                val limitCents = state.waterLimitCents?.takeIf { it > 0 }
                 StatCard(
                     icon = R.drawable.ic_water,
-                    value = "¥ " + money(state.waterUsage.totalCents),
+                    value = if (limitCents == null) "¥ " + money(state.waterUsage.totalCents)
+                    else "¥" + money(state.waterUsage.totalCents) + "/¥" + money(limitCents),
                     label = "本月用水",
                     modifier = Modifier.weight(1f),
                     onClick = onWaterReport
@@ -237,13 +238,17 @@ private fun HomeHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                greeting,
+                if (name.isNotBlank()) greeting + "，" + name else greeting,
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                (if (name.isNotBlank()) name + "，" else "") + "今天用了 " + todayCount + " 次水",
+                when (todayCount) {
+                    0 -> "今天还没有用水"
+                    1 -> "今天用了 1 次水"
+                    else -> "今天用了 " + todayCount + " 次水"
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -274,7 +279,7 @@ private fun HomeRoundButton(onClick: () -> Unit, content: @Composable () -> Unit
                 if (dark) IosTokens.GlassStrokeDark else Color(0xE6FFFFFF),
                 CircleShape
             )
-            .clickable { haptics.light(); onClick() },
+            .hydrosPressable { haptics.light(); onClick() },
         contentAlignment = Alignment.Center
     ) { content() }
 }
@@ -301,7 +306,7 @@ private fun StatCard(
         Spacer(Modifier.height(18.dp))
         Text(
             value,
-            style = MaterialTheme.typography.headlineSmall,
+            style = if (value.length > 10) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1
@@ -665,7 +670,7 @@ private fun FavoriteDeviceRow(device: DeviceUi, remarks: Map<String, String>, on
         Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clickable { haptics.light(); onClick() }
+            .hydrosPressable { haptics.light(); onClick() }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -713,15 +718,30 @@ private fun sessionSubtitle(session: SessionUi): String {
 /** 头像按钮：圆形裁剪 + 右下角相机角标，点击打开系统相册。 */
 @Composable
 private fun ProfileAvatar(path: String?, onClick: () -> Unit) {
-    val avatar = remember(path) {
-        path?.let { file -> runCatching { BitmapFactory.decodeFile(file)?.asImageBitmap() }.getOrNull() }
+    val context = LocalContext.current
+    val avatar = remember(path, context) {
+        // 兼容三种历史存法：固定文件名、旧版绝对路径、更早版本直接存的 content:// URI。
+        val file = path?.let { raw ->
+            if (raw.startsWith("/")) File(raw) else File(File(context.filesDir, "avatar"), raw)
+        }
+        when {
+            file != null && file.exists() ->
+                runCatching { BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() }.getOrNull()
+            path != null ->
+                runCatching {
+                    context.contentResolver.openInputStream(Uri.parse(path))?.use { input ->
+                        BitmapFactory.decodeStream(input)?.asImageBitmap()
+                    }
+                }.getOrNull()
+            else -> null
+        }
     }
     Box(Modifier.size(60.dp)) {
         Box(
             Modifier.fillMaxSize().clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                .clickable(onClick = onClick),
+                .hydrosPressable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             if (avatar != null) {
@@ -750,14 +770,23 @@ private fun ProfileAvatar(path: String?, onClick: () -> Unit) {
  * 把相册里选中的图片缩到 512px 以内再写进应用私有目录，返回文件绝对路径。
  * 文件名带时间戳：路径变化能让界面里的 remember(path) 自动失效，不用额外维护版本号。
  */
+/** 头像文件名固定，避免升级后绝对路径失效。 */
+private const val AVATAR_FILE_NAME = "avatar.jpg"
+
 private suspend fun storeAvatar(context: android.content.Context, uri: Uri): String? = withContext(Dispatchers.IO) {
     val bitmap = decodeAvatar(context, uri, maxSide = 512) ?: return@withContext null
     val dir = File(context.filesDir, "avatar").apply { mkdirs() }
-    val target = File(dir, "avatar-" + System.currentTimeMillis() + ".jpg")
-    target.outputStream().use { output -> bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output) }
+    // 固定文件名 + 只存文件名：升级/重装后路径变化也不会丢头像。
+    val target = File(dir, AVATAR_FILE_NAME)
+    val temp = File(dir, "avatar.tmp")
+    temp.outputStream().use { output -> bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output) }
     bitmap.recycle()
+    if (!temp.renameTo(target)) {
+        target.outputStream().use { output -> temp.inputStream().copyTo(output) }
+        temp.delete()
+    }
     dir.listFiles()?.forEach { file -> if (file.name != target.name) file.delete() }
-    target.absolutePath
+    AVATAR_FILE_NAME
 }
 
 /** 两趟解码：先读尺寸算出采样率，再真正解码，避免把相机原图整张读进内存。 */

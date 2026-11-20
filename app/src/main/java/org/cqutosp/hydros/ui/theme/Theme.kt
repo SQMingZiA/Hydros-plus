@@ -251,11 +251,28 @@ private val HydrosTypography = Typography(
     labelSmall = TextStyle(fontFamily = FontFamily.SansSerif, letterSpacing = 0.2.sp, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium),
 )
 
-/** 把整套字阶替换为指定字体：大标题用 Display 字族，正文用 Text 字族，字号/行高/字重保持不变。 */
-fun hydrosTypography(fontSet: HydrosFontSet, base: Typography): Typography {
+/** 字重档位：0 为设计稿原始字重，正数加粗、负数变细，按 100 一档在 W200..W900 内收拢。 */
+private val WeightLadder = listOf(
+    FontWeight.W200, FontWeight.W300, FontWeight.W400, FontWeight.W500,
+    FontWeight.W600, FontWeight.W700, FontWeight.W800, FontWeight.W900
+)
+
+/** 把原始字重按档位平移；W200 以下或 W900 以上自动夹紧。 */
+fun shiftWeight(weight: FontWeight, steps: Int): FontWeight {
+    if (steps == 0) return weight
+    val current = WeightLadder.indexOfFirst { it.weight == weight.weight }
+    if (current < 0) return weight
+    return WeightLadder[(current + steps).coerceIn(0, WeightLadder.lastIndex)]
+}
+
+/**
+ * 把整套字阶替换为指定字体：大标题用 Display 字族，正文用 Text 字族；
+ * weightStep 为字重档位（每档 100），字号与行高保持不变。
+ */
+fun hydrosTypography(fontSet: HydrosFontSet, base: Typography, weightStep: Int = 0): Typography {
     val display = fontSet.display
     val text = fontSet.text
-    return base.copy(
+    val scaled = base.copy(
         displayLarge = base.displayLarge.copy(fontFamily = display),
         displayMedium = base.displayMedium.copy(fontFamily = display),
         displaySmall = base.displaySmall.copy(fontFamily = display),
@@ -272,6 +289,25 @@ fun hydrosTypography(fontSet: HydrosFontSet, base: Typography): Typography {
         labelMedium = base.labelMedium.copy(fontFamily = text),
         labelSmall = base.labelSmall.copy(fontFamily = text),
     )
+    if (weightStep == 0) return scaled
+    fun TextStyle.w() = copy(fontWeight = shiftWeight(fontWeight ?: FontWeight.Normal, weightStep))
+    return scaled.copy(
+        displayLarge = scaled.displayLarge.w(),
+        displayMedium = scaled.displayMedium.w(),
+        displaySmall = scaled.displaySmall.w(),
+        headlineLarge = scaled.headlineLarge.w(),
+        headlineMedium = scaled.headlineMedium.w(),
+        headlineSmall = scaled.headlineSmall.w(),
+        titleLarge = scaled.titleLarge.w(),
+        titleMedium = scaled.titleMedium.w(),
+        titleSmall = scaled.titleSmall.w(),
+        bodyLarge = scaled.bodyLarge.w(),
+        bodyMedium = scaled.bodyMedium.w(),
+        bodySmall = scaled.bodySmall.w(),
+        labelLarge = scaled.labelLarge.w(),
+        labelMedium = scaled.labelMedium.w(),
+        labelSmall = scaled.labelSmall.w(),
+    )
 }
 
 @Deprecated("改用 hydrosTypography(HydrosFontSet, Typography)")
@@ -283,6 +319,7 @@ fun HydrosTheme(
     mode: ThemeMode = ThemeMode.SYSTEM,
     feedback: FeedbackSettings = FeedbackSettings(),
     fontSizeScale: Float = 1f,
+    fontWeightStep: Int = 0,
     fontSet: HydrosFontSet = HydrosSystemFontSet,
     accent: Color? = null,
     gradientPreset: GradientPreset = LocalHydrosGradient.current,
@@ -303,7 +340,7 @@ fun HydrosTheme(
     )
     MaterialTheme(
         colorScheme = scheme,
-        typography = hydrosTypography(fontSet, HydrosTypography),
+        typography = hydrosTypography(fontSet, HydrosTypography, fontWeightStep),
         shapes = Shapes(
             extraSmall = RoundedCornerShape(4.dp),
             small = RoundedCornerShape(8.dp),

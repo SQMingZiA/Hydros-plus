@@ -228,6 +228,9 @@ fun GlassPanel(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                if (onClick != null) Modifier.hydrosPressable(pressedScale = 0.98f) { haptics.light(); onClick() } else Modifier
+            )
             .shadow(
                 elevation = 12.dp,
                 shape = shape,
@@ -237,9 +240,6 @@ fun GlassPanel(
             )
             .clip(shape)
             .background(if (dark) IosTokens.GlassFillDark else IosTokens.GlassFill)
-            .then(
-                if (onClick != null) Modifier.clickable { haptics.light(); onClick() } else Modifier
-            )
             .border(1.dp, if (dark) IosTokens.GlassStrokeDark else IosTokens.GlassHairline, shape)
             .padding(contentPadding),
         content = content
@@ -291,19 +291,14 @@ fun GlassIconButton(
     content: @Composable () -> Unit
 ) {
     val haptics = rememberHydrosHaptics()
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (pressed) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f) else Color.Transparent)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
+            .hydrosPressable(
                 role = Role.Button,
                 onClickLabel = description
-            ) { haptics.light(); onClick() },
+            ) { haptics.light(); onClick() }
+            .clip(RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
         CompositionLocalProviderHelper(content)
@@ -377,22 +372,16 @@ fun EmphasisBlock(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dark = isDarkScheme()
-    val interaction = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(10.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .clip(shape)
-            .background(if (dark) IosTokens.EmphasisDark else IosTokens.Emphasis)
             .then(
-                if (onClick != null) Modifier.clickable(
-                    interactionSource = interaction,
-                    indication = null,
-                    role = Role.Button,
-                    onClick = onClick
-                ) else Modifier
-            ),
+                if (onClick != null) Modifier.hydrosPressable(pressedScale = 0.98f) { onClick() } else Modifier
+            )
+            .clip(shape)
+            .background(if (dark) IosTokens.EmphasisDark else IosTokens.Emphasis),
         verticalAlignment = Alignment.Top
     ) {
         Box(

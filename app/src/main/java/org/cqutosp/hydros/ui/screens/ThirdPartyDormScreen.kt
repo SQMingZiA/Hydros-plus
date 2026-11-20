@@ -192,7 +192,7 @@ private fun NearbyDeviceRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .clickable(role = Role.RadioButton, onClick = onClick)
+            .hydrosPressable(role = Role.RadioButton, onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)

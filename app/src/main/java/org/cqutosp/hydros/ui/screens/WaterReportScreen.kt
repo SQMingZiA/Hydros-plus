@@ -63,7 +63,7 @@ fun WaterReportScreen(
             Row(
                 Modifier
                     .weight(1f)
-                    .clickable(enabled = selectedMonth != null) { showMonths = true }
+                    .hydrosPressable(enabled = selectedMonth != null) { showMonths = true }
                     .padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
@@ -398,10 +398,10 @@ private fun HeatmapCell(
     Box(
         modifier = modifier
             .aspectRatio(1f)
+            .hydrosPressable(onClick = onClick)
             .clip(shape)
             .background(heatLevelColor(level))
-            .then(if (borderColor != null) Modifier.border(borderWidth, borderColor, shape) else Modifier)
-            .clickable(onClick = onClick),
+            .then(if (borderColor != null) Modifier.border(borderWidth, borderColor, shape) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Text(usage.day.toString(), fontSize = 11.sp, color = textColor)
@@ -496,7 +496,7 @@ private fun MonthStepButton(previous: Boolean, enabled: Boolean, onClick: () -> 
     Box(
         Modifier
             .size(40.dp)
-            .clickable(enabled = enabled, onClick = onClick),
+            .hydrosPressable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Glyph(

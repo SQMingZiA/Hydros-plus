@@ -33,6 +33,7 @@ import org.cqutosp.hydros.ui.components.FormField
 import org.cqutosp.hydros.ui.components.IconTile
 import org.cqutosp.hydros.ui.components.IconTone
 import org.cqutosp.hydros.ui.components.LocalHydrosSnackbar
+import org.cqutosp.hydros.ui.components.hydrosPressable
 import org.cqutosp.hydros.ui.components.PageColumn
 import org.cqutosp.hydros.ui.components.PrimaryAction
 import org.cqutosp.hydros.ui.components.Section
@@ -193,9 +194,9 @@ private fun SurfacePill(text: String, onClick: () -> Unit) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
+            .hydrosPressable(onClick = onClick)
             .clip(RoundedCornerShape(999.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     )
 }

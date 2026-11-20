@@ -410,18 +410,13 @@ private fun WaterPillButton(label: String, onClick: () -> Unit, filled: Boolean,
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
+            .hydrosPressable(role = Role.Button) {
+                haptics.light()
+                onClick()
+            }
             .clip(shape)
             .background(if (filled) Color.White.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.16f))
-            .then(if (filled) Modifier else Modifier.border(1.dp, Color.White.copy(alpha = 0.55f), shape))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = if (filled) colors.primary else Color.White),
-                role = Role.Button,
-                onClick = {
-                    haptics.light()
-                    onClick()
-                }
-            ),
+            .then(if (filled) Modifier else Modifier.border(1.dp, Color.White.copy(alpha = 0.55f), shape)),
         contentAlignment = Alignment.Center,
     ) {
         Text(

@@ -40,34 +40,29 @@ fun PrimaryAction(
     val snackbar = LocalHydrosSnackbar.current
     val haptics = rememberHydrosHaptics()
     val painted = loading || (enabled && disabledReason == null)
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
     val shape = RoundedCornerShape(IosTokens.ControlRadius)
     Box(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clip(shape)
-            .background(
-                when {
-                    painted -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-            )
-            .then(if (painted) Modifier.alpha(if (pressed) 0.88f else 1f) else Modifier)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
+            .hydrosPressable(
                 role = Role.Button,
                 enabled = enabled || loading,
                 onClick = {
-                    if (loading) return@clickable
+                    if (loading) return@hydrosPressable
                     if (disabledReason != null) {
                         snackbar.show(disabledReason)
                     } else {
                         haptics.light()
                         onClick()
                     }
+                }
+            )
+            .clip(shape)
+            .background(
+                when {
+                    painted -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.surfaceVariant
                 }
             )
             .semantics {
@@ -113,15 +108,6 @@ fun SecondaryAction(
     val dark = isDarkScheme()
     val accent = MaterialTheme.colorScheme.primary
     Surface(
-        onClick = {
-            if (disabledReason != null) {
-                snackbar.show(disabledReason)
-            } else {
-                haptics.light()
-                onClick()
-            }
-        },
-        enabled = enabled,
         shape = RoundedCornerShape(IosTokens.ControlRadius),
         color = Color.Transparent,
         contentColor = if (effectiveEnabled) accent else accent.copy(alpha = 0.4f),
@@ -129,6 +115,18 @@ fun SecondaryAction(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
+            .hydrosPressable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = {
+                    if (disabledReason != null) {
+                        snackbar.show(disabledReason)
+                    } else {
+                        haptics.light()
+                        onClick()
+                    }
+                }
+            )
             .semantics { if (disabledReason != null) stateDescription = disabledReason }
     ) {
         Row(

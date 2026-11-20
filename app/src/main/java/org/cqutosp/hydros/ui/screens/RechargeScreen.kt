@@ -191,9 +191,9 @@ private fun BalanceSection(ui: RechargeUi, onRefresh: () -> Unit, merchant: Stri
             Box(
                 modifier = Modifier
                     .size(36.dp)
+                    .hydrosPressable(enabled = !ui.refreshingBalance, onClick = onRefresh)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(colors.surfaceVariant)
-                    .clickable(enabled = !ui.refreshingBalance, onClick = onRefresh),
+                    .background(colors.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
                 Glyph(
@@ -250,7 +250,7 @@ private fun PackageTile(
     Surface(
         modifier = modifier
             .heightIn(min = 72.dp)
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+            .then(if (enabled) Modifier.hydrosPressable(pressedScale = 0.98f, onClick = onClick) else Modifier),
         shape = RoundedCornerShape(8.dp),
         color = if (selected) colors.primary.copy(alpha = 0.10f) else colors.surfaceVariant,
         border = BorderStroke(

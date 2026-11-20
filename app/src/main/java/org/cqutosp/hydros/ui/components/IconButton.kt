@@ -58,9 +58,7 @@ fun HydrosIconButton(
         modifier = modifier
             .size(size.size)
             .clip(CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = colors.onSurface),
+            .hydrosPressable(
                 enabled = enabled,
                 role = Role.Button,
                 onClick = { haptics.light(); onClick() }

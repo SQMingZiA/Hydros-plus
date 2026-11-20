@@ -60,7 +60,7 @@ fun LazyListScope.billHistoryList(
                     maxLines = 1
                 )
                 Surface(
-                    onClick = { showMonths = true },
+                    modifier = Modifier.hydrosPressable(pressedScale = 0.98f) { showMonths = true },
                     shape = CircleShape,
                     color = colors.surfaceVariant.copy(alpha = 0.7f),
                     contentColor = colors.primary

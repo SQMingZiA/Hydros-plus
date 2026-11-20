@@ -307,7 +307,7 @@ fun CheckboxRow(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         modifier = modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled) { haptics.light(); onCheckedChange(!checked) }
+            .hydrosPressable(enabled = enabled, pressedScale = 0.99f) { haptics.light(); onCheckedChange(!checked) }
     ) {
         Row(
             modifier = Modifier

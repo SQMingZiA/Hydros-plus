@@ -26,7 +26,8 @@ import kotlin.math.roundToInt
 @Composable
 fun DisplaySettingsScreen(savedScale: Float, onPreview: (Float?) -> Unit, onSave: suspend (Float) -> Boolean,
     postSessionDestination: PostSessionDestination, onPostSessionDestination: (PostSessionDestination) -> Unit,
-    homeConnectCardVisible: Boolean = true, onHomeConnectCardVisible: (Boolean) -> Unit = {}) {
+    homeConnectCardVisible: Boolean = true, onHomeConnectCardVisible: (Boolean) -> Unit = {},
+    fontWeightStep: Int = 0, onFontWeightStep: (Int) -> Unit = {}) {
     val options = FontSizeOption.entries
     var draft by remember(savedScale) { mutableFloatStateOf(savedScale) }
     var saving by remember { mutableStateOf(false) }
@@ -99,6 +100,58 @@ fun DisplaySettingsScreen(savedScale: Float, onPreview: (Float?) -> Unit, onSave
                         modifier = Modifier.heightIn(min = 44.dp).wrapContentHeight(Alignment.CenterVertically),
                         fontSize = 26.sp,
                         fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+        Section("字体粗细") {
+            val weights = listOf(-1, 0, 1, 2)
+            val weightLabels = listOf("细", "标准", "较粗", "粗")
+            val weightIndex = weights.indexOf(fontWeightStep).coerceAtLeast(0)
+            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "A",
+                        modifier = Modifier.heightIn(min = 44.dp).wrapContentHeight(Alignment.CenterVertically),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.W300,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Column(Modifier.weight(1f)) {
+                        CompositionLocalProvider(LocalDensity provides LocalSystemDensity.current) {
+                            Slider(
+                                value = weightIndex.toFloat(), valueRange = 0f..3f, steps = 2,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    activeTickColor = Color.Transparent,
+                                    inactiveTickColor = Color.Transparent,
+                                ),
+                                modifier = Modifier.fillMaxWidth().semantics {
+                                    contentDescription = "字体粗细"
+                                    stateDescription = weightLabels[weightIndex]
+                                },
+                                onValueChange = { value ->
+                                    val next = weights[value.roundToInt().coerceIn(0, 3)]
+                                    if (next != fontWeightStep) { haptics.medium(); onFontWeightStep(next) }
+                                },
+                            )
+                            Text(
+                                weightLabels[weightIndex],
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Text(
+                        "A",
+                        modifier = Modifier.heightIn(min = 44.dp).wrapContentHeight(Alignment.CenterVertically),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.W800,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }

@@ -28,10 +28,10 @@ import javax.crypto.spec.GCMParameterSpec
 @Serializable data class FeedbackSettings(val hapticFeedbackEnabled: Boolean = true, val reduceMotionEnabled: Boolean = false)
 @Serializable private data class SavedSettings(val token: String? = null, val lastAccount: String? = null, val theme: String = "SYSTEM", val accounts: Map<String, SavedAccount> = emptyMap(), val onboardingCompleted: Boolean = false,
     val feedback: FeedbackSettings = FeedbackSettings(), val fontSizeScale: Float = 1f,
-    val postSessionDestination: String = PostSessionDestination.DEVICE.name,
+    val postSessionDestination: String = PostSessionDestination.BILL.name,
     val homeConnectCardVisible: Boolean = true, val waterLimitCents: Long? = null,
     val waterLimitNotifiedMonth: String? = null, val avatarPath: String? = null, val demoMode: Boolean = false,
-    val fontFamily: String = "PINGFANG", val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
+    val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null, val wallpaperDim: Float = 0.0f, val wallpaperBlur: Float = 0.0f,
     val voiceAssistantEnabled: Boolean = false)
 interface HydrosStore {
@@ -48,7 +48,7 @@ interface HydrosStore {
     suspend fun fontSizeScale(value: Float)
     suspend fun onboardingCompleted(): Boolean = false
     suspend fun onboardingCompleted(value: Boolean) {}
-    suspend fun postSessionDestination(): PostSessionDestination = PostSessionDestination.DEVICE
+    suspend fun postSessionDestination(): PostSessionDestination = PostSessionDestination.BILL
     suspend fun postSessionDestination(value: PostSessionDestination) {}
     /** 首页"连接身边的设备"卡片是否展示，关闭后不再显示。 */
     suspend fun homeConnectCardVisible(): Boolean = true
@@ -66,6 +66,9 @@ interface HydrosStore {
     suspend fun voiceAssistantEnabled(): Boolean = false
     suspend fun voiceAssistantEnabled(value: Boolean) {}
     /** 自定义头像在应用私有目录里的绝对路径，null 表示使用默认头像。 */
+    suspend fun fontWeightStep(): Int = 0
+    suspend fun fontWeightStep(value: Int) {}
+
     suspend fun avatarPath(): String? = null
     suspend fun avatarPath(value: String?) {}
     /** 应用字体："PINGFANG" 内置苹方，"SYSTEM" 跟随系统。 */
@@ -140,7 +143,7 @@ class PreferencesHydrosStore(context: Context) : HydrosStore {
     override suspend fun onboardingCompleted(value: Boolean) { edit { it.copy(onboardingCompleted = value) } }
     override suspend fun postSessionDestination(): PostSessionDestination {
         val saved = read().postSessionDestination
-        return PostSessionDestination.entries.firstOrNull { it.name == saved } ?: PostSessionDestination.DEVICE
+        return PostSessionDestination.entries.firstOrNull { it.name == saved } ?: PostSessionDestination.BILL
     }
     override suspend fun postSessionDestination(value: PostSessionDestination) { edit { it.copy(postSessionDestination = value.name) } }
     override suspend fun homeConnectCardVisible() = read().homeConnectCardVisible
@@ -153,6 +156,8 @@ class PreferencesHydrosStore(context: Context) : HydrosStore {
     override suspend fun demoMode(value: Boolean) { edit { it.copy(demoMode = value) } }
     override suspend fun voiceAssistantEnabled() = read().voiceAssistantEnabled
     override suspend fun voiceAssistantEnabled(value: Boolean) { edit { it.copy(voiceAssistantEnabled = value) } }
+    override suspend fun fontWeightStep() = read().fontWeightStep
+    override suspend fun fontWeightStep(value: Int) { edit { it.copy(fontWeightStep = value) } }
     override suspend fun avatarPath() = read().avatarPath
     override suspend fun avatarPath(value: String?) { edit { it.copy(avatarPath = value) } }
     override suspend fun fontFamily() = read().fontFamily

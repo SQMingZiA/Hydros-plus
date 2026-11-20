@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 趣智校园预设桌面图标前景：用户提供的红色「趣智」图标，铺满自适应图标前景层。 -->
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/qzxy_logo"
-    android:gravity="fill" />

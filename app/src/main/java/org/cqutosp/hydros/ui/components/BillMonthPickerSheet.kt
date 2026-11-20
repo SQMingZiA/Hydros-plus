@@ -178,7 +178,7 @@ internal fun MonthWheelColumn(
             Box(
                 Modifier.fillMaxWidth().height(MONTH_WHEEL_ROW_HEIGHT)
                     .semantics { selected = index == centeredIndex }
-                    .clickable { scope.launch { listState.animateScrollToItem(index) } },
+                    .hydrosPressable(pressedScale = 0.99f) { scope.launch { listState.animateScrollToItem(index) } },
                 contentAlignment = Alignment.Center
             ) {
                 Text(

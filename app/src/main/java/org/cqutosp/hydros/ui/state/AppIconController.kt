@@ -2,7 +2,11 @@ package org.cqutosp.hydros.ui.state
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
+import android.content.pm.ShortcutManager
+import android.os.Process
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,13 +31,14 @@ object AppIconAliases {
 /**
  * 桌面图标切换：通过 PackageManager.setComponentEnabledSetting 启用目标 activity-alias 并禁用另一个。
  *
- * 这里只碰组件状态与本地偏好，不重启进程（DONT_KILL_APP），避免正在进行的业务被中断。
+ * 这里只碰组件状态与本地偏好，不重启进程（DONT_KILL_APP），避免正在进行的业务被中断；
+ * 切换后额外做一次缓存唤醒，让只读启动器缓存的桌面尽快重新拉取图标信息。
  */
 object AppIconController {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** 立即应用图标键：切换别名 enabled 状态，并异步落盘。 */
+    /** 立即应用图标键：切换别名 enabled 状态，唤醒桌面缓存，并异步落盘。 */
     fun apply(context: Context, key: String) {
         val app = context.applicationContext
         val normalized = AppIconKeys.normalize(key)
@@ -45,6 +50,7 @@ object AppIconController {
                 setEnabled(app, alias, false)
             }
         }
+        wakeLauncherCaches(app, target)
         scope.launch {
             runCatching { AppIconStore(app).icon(normalized) }
         }
@@ -76,6 +82,41 @@ object AppIconController {
                 state,
                 PackageManager.DONT_KILL_APP
             )
+        }
+    }
+
+    /**
+     * 别名的 enabled 状态变化后，通知系统与启动器重新读取组件信息。
+     *
+     * 部分厂商桌面只在收到包/图标相关回调时才刷新缓存，光切别名会继续显示旧图标。
+     * 这里依次做几件“读一次即触发刷新”的廉价操作，全部包在 runCatching 里，失败也不影响切换结果：
+     * 1. 读一次目标别名的 ActivityInfo，确保 PackageManager 缓存中的组件信息是新的；
+     * 2. 查询一次桌面 Intent，让系统桌面列表缓存更新；
+     * 3. 通过 LauncherApps 拉一次本应用的桌面入口列表（部分桌面监听这次调用刷新图标）；
+     * 4. 刷新已固定的快捷方式，避免快捷方式仍显示旧图标。
+     */
+    private fun wakeLauncherCaches(context: Context, alias: String) {
+        val packageName = context.packageName
+        val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            setPackage(packageName)
+        }
+        runCatching {
+            context.packageManager.getActivityInfo(
+                ComponentName(packageName, alias),
+                PackageManager.MATCH_DISABLED_COMPONENTS
+            )
+        }
+        runCatching {
+            context.packageManager.queryIntentActivities(launcherIntent, 0)
+        }
+        runCatching {
+            context.getSystemService(LauncherApps::class.java)?.getActivityList(packageName, Process.myUserHandle())
+        }
+        runCatching {
+            context.getSystemService(ShortcutManager::class.java)?.let { manager ->
+                manager.updateShortcuts(manager.dynamicShortcuts)
+            }
         }
     }
 }

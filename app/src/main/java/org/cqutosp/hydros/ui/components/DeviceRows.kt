@@ -33,9 +33,7 @@ fun DeviceRow(device: DeviceUi, remarks: Map<String, String> = emptyMap(), onCli
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(color = colors.primary),
+            .hydrosPressable(
                 role = Role.Button,
                 onClick = { haptics.light(); onClick() }
             )

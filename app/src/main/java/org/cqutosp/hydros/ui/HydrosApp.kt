@@ -91,6 +91,7 @@ import org.cqutosp.hydros.ui.thirdparty.thirdPartyViewModel
 import org.cqutosp.hydros.ui.components.HydrosSnackbarProvider
 import org.cqutosp.hydros.ui.components.HydrosSnackbarState
 import org.cqutosp.hydros.ui.components.Glyph
+import org.cqutosp.hydros.ui.components.hydrosPressable
 import org.cqutosp.hydros.ui.components.HoldActionHost
 import org.cqutosp.hydros.ui.components.rememberHydrosHaptics
 import org.cqutosp.hydros.ui.legal.LegalDocuments
@@ -405,6 +406,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
         mode = state.theme,
         feedback = state.feedback,
         fontSizeScale = fontSizePreview ?: state.fontSizeScale,
+        fontWeightStep = state.fontWeightStep,
         fontSet = FontChoice.fromKey(state.fontFamily).fontSet(),
         accent = accentColor,
         gradientPreset = GradientPreset.fromKey(state.gradientPreset),
@@ -629,7 +631,9 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 DisplaySettingsScreen(state.fontSizeScale, onPreview = { fontSizePreview = it }, onSave = model::fontSizeScale,
                                     postSessionDestination = state.postSessionDestination, onPostSessionDestination = model::postSessionDestination,
                                     homeConnectCardVisible = state.homeConnectCardVisible,
-                                    onHomeConnectCardVisible = model::homeConnectCardVisible)
+                                    onHomeConnectCardVisible = model::homeConnectCardVisible,
+                                    fontWeightStep = state.fontWeightStep,
+                                    onFontWeightStep = model::fontWeightStep)
                             }
                         }
                         composable("thirdparty/usecode") {
@@ -908,8 +912,8 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 Column(Modifier.fillMaxSize().statusBarsPadding()) {
                                     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Box(
-                                            Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f))
-                                                .clickable { back() },
+                                            Modifier.size(40.dp).hydrosPressable { back() }
+                                                .clip(CircleShape).background(Color.White.copy(alpha = 0.16f)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Glyph(R.drawable.ic_back, modifier = Modifier.size(20.dp), tint = Color.White, description = "返回")
@@ -1094,10 +1098,10 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
             Box(
                 Modifier
                     .size(56.dp)
+                    .hydrosPressable { haptics.light(); onScan() }
                     .shadow(14.dp, CircleShape)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(listOf(IosTokens.FabStart, IosTokens.FabEnd)))
-                    .clickable { haptics.light(); onScan() }
                     .testTag("scan-action"),
                 contentAlignment = Alignment.Center
             ) {

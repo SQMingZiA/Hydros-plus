@@ -114,7 +114,7 @@ fun AboutScreen(
         Row(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 20.dp), horizontalArrangement = Arrangement.Center) {
             Text("© ${Instant.parse(BuildConfig.BUILD_TIME).atZone(ZoneId.systemDefault()).year} UE-DND · ",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Apache-2.0", Modifier.clickable(onClick = onProjectLicense), textDecoration = TextDecoration.Underline,
+            Text("Apache-2.0", Modifier.hydrosPressable(onClick = onProjectLicense), textDecoration = TextDecoration.Underline,
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -253,7 +253,7 @@ fun OpenSourceLicensesScreen() {
 @Composable
 private fun LicenseRow(title: String, supporting: String, onClick: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().hydrosPressable(pressedScale = 0.99f, onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)

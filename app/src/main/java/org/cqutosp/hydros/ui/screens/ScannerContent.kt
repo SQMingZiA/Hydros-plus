@@ -62,6 +62,7 @@ import org.cqutosp.hydros.R
 import org.cqutosp.hydros.data.feedback.*
 import org.cqutosp.hydros.ui.components.ChoiceDialog
 import org.cqutosp.hydros.ui.components.Glyph
+import org.cqutosp.hydros.ui.components.hydrosPressable
 import org.cqutosp.hydros.ui.components.LocalHydrosSnackbar
 import org.cqutosp.hydros.ui.components.SnackbarAction
 import org.cqutosp.hydros.ui.components.SnackbarMessage
@@ -452,9 +453,9 @@ private fun ScanPillButton(
 ) {
     Box(
         modifier = modifier
+            .hydrosPressable(role = Role.Button, onClick = onClick)
             .clip(RoundedCornerShape(999.dp))
             .background(if (filled) Color.White else Color.White.copy(alpha = 0.16f))
-            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -504,15 +505,13 @@ private fun ScanGlyphButton(
     Box(
         modifier = modifier
             .size(40.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.16f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
+            .hydrosPressable(
                 role = Role.Button,
                 onClickLabel = description,
                 onClick = { haptics.light(); onClick() },
-            ),
+            )
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.16f)),
         contentAlignment = Alignment.Center,
     ) {
         Glyph(iconRes, modifier = Modifier.size(22.dp), tint = Color.White, description = description)
@@ -531,9 +530,7 @@ private fun ScanTorchEntry(
     val haptics = rememberHydrosHaptics()
     Column(
         modifier = modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
+            .hydrosPressable(
                 role = Role.Button,
                 onClick = {
                     if (disabledReason != null) snackbar.show(disabledReason)
@@ -589,9 +586,7 @@ private fun ScanRoundEntry(
     val haptics = rememberHydrosHaptics()
     Column(
         modifier = modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
+            .hydrosPressable(
                 enabled = enabled,
                 role = Role.Button,
                 onClick = {
@@ -678,9 +673,9 @@ private fun ScanCameraNotice(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(
                 modifier = Modifier
+                    .hydrosPressable(role = Role.Button, onClick = if (granted) onRetry else onPermission)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color.White)
-                    .clickable(role = Role.Button, onClick = if (granted) onRetry else onPermission)
                     .padding(horizontal = 22.dp, vertical = 12.dp),
             ) {
                 Text(
@@ -692,9 +687,9 @@ private fun ScanCameraNotice(
             if (!granted && onSettings != null) {
                 Box(
                     modifier = Modifier
+                        .hydrosPressable(role = Role.Button, onClick = onSettings)
                         .clip(RoundedCornerShape(8.dp))
                         .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                        .clickable(role = Role.Button, onClick = onSettings)
                         .padding(horizontal = 22.dp, vertical = 12.dp),
                 ) {
                     Text(
