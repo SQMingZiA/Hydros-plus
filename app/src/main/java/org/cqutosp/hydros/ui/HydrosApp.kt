@@ -1,0 +1,1264 @@
+package org.cqutosp.hydros.ui
+
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.activity.compose.BackHandler
+import org.cqutosp.hydros.ui.components.SnackbarEnd
+import androidx.core.view.WindowCompat
+
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.background
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.sp
+import org.cqutosp.hydros.ui.components.isDarkScheme
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.activity.compose.LocalActivity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModel
+import androidx.compose.ui.platform.LocalContext
+import org.cqutosp.hydros.data.HydrosApplication
+import org.cqutosp.hydros.data.storage.AppIconKeys
+import org.cqutosp.hydros.data.storage.PostSessionDestination
+import android.os.Build
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
+import androidx.navigation.compose.*
+import org.cqutosp.hydros.BuildConfig
+import org.cqutosp.hydros.R
+import org.cqutosp.hydros.thirdparty.AlipayResult
+import org.cqutosp.hydros.thirdparty.RechargeOrder
+import org.cqutosp.hydros.ui.thirdparty.launchAlipayOrder
+import org.cqutosp.hydros.ui.components.HydrosPage
+import org.cqutosp.hydros.ui.components.InlineState
+import org.cqutosp.hydros.ui.components.PrimaryAction
+import org.cqutosp.hydros.ui.components.TextAction
+import org.cqutosp.hydros.ui.thirdparty.ThirdPartyViewModel
+import org.cqutosp.hydros.ui.thirdparty.thirdPartyViewModel
+import org.cqutosp.hydros.ui.components.HydrosSnackbarProvider
+import org.cqutosp.hydros.ui.components.HydrosSnackbarState
+import org.cqutosp.hydros.ui.components.Glyph
+import org.cqutosp.hydros.ui.components.HoldActionHost
+import org.cqutosp.hydros.ui.components.rememberHydrosHaptics
+import org.cqutosp.hydros.ui.legal.LegalDocuments
+import com.mikepenz.markdown.model.rememberMarkdownState
+import org.cqutosp.hydros.ui.state.*
+import org.cqutosp.hydros.ui.screens.*
+import org.cqutosp.hydros.ui.theme.HydrosTheme
+import org.cqutosp.hydros.ui.theme.FontChoice
+import org.cqutosp.hydros.ui.theme.fontSet
+import org.cqutosp.hydros.ui.theme.GradientPreset
+import androidx.activity.ComponentActivity
+import org.cqutosp.hydros.ui.components.LocalHydrosWallpaper
+import org.cqutosp.hydros.ui.components.WallpaperConfig
+import org.cqutosp.hydros.ui.state.AppIconController
+import androidx.activity.result.PickVisualMediaRequest
+import org.cqutosp.hydros.ui.theme.IosTokens
+import android.speech.tts.TextToSpeech
+import org.cqutosp.hydros.voice.VoiceCommand
+import org.cqutosp.hydros.voice.VoiceCommands
+
+private data class AppDestination(val route: String, val label: String, val icon: Int, val iconOutline: Int)
+private val destinations = listOf(
+    AppDestination("home", "首页", R.drawable.ic_home, R.drawable.ic_home),
+    AppDestination("recharge", "充值", R.drawable.ic_wallet, R.drawable.ic_wallet_outline),
+    AppDestination("mine", "我的", R.drawable.ic_person, R.drawable.ic_person_outline),
+)
+
+private fun isTabSwitch(from: String?, to: String?): Boolean =
+    destinations.any { it.route == from } && destinations.any { it.route == to }
+
+@Composable
+private fun hydrosViewModel(): HydrosViewModel {
+    val dependencies=(LocalContext.current.applicationContext as HydrosApplication).dependencies
+    return viewModel(factory=remember(dependencies) { object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = HydrosViewModel(dependencies) as T
+    } })
+}
+
+@Composable
+private fun appInfoViewModel(): AppInfoViewModel {
+    val context = LocalContext.current.applicationContext
+    val app = context as HydrosApplication
+    val source = app.appUpdates
+    val installer = app.appInstaller
+    return viewModel(factory = remember(source, installer) { object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = AppInfoViewModel(source, installer) as T
+    } })
+}
+
+@Composable
+fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewModel = appInfoViewModel(),
+    thirdParty: ThirdPartyViewModel = thirdPartyViewModel()) {
+    val state by model.state.collectAsStateWithLifecycle()
+    val updates by appInfo.updates.collectAsStateWithLifecycle()
+    val history by appInfo.history.collectAsStateWithLifecycle()
+    val detail by appInfo.detail.collectAsStateWithLifecycle()
+    val nav = rememberNavController()
+    // 首页与钱包是同一页面的两个顶部标签，用 pager 承载以保留滑动切换与拖拽指示条。
+    val pageState = rememberPagerState(pageCount = { 2 })
+    val pageScope = rememberCoroutineScope()
+    var fontSizePreview by remember { mutableStateOf<Float?>(null) }
+    // Parse static legal documents off the UI thread before either entry is opened.
+    // These states outlive their destinations and are reused on subsequent visits.
+    val terms = rememberMarkdownState(LegalDocuments.TERMS_OF_SERVICE)
+    val privacy = rememberMarkdownState(LegalDocuments.PRIVACY_POLICY)
+    val context=LocalContext.current
+    val appData = (context.applicationContext as HydrosApplication).appData
+    // The installer exposes at most one pending settings/confirmation intent; launch it as the
+    // system would after a silent commit so the user never has to find the right button.
+    LaunchedEffect(updates.install.phase, updates.install.error) {
+        appInfo.takeUpdateLaunchIntent()?.let { intent ->
+            if (runCatching { context.startActivity(intent) }.isFailure) appInfo.restoreUpdateLaunchIntent(intent)
+        }
+    }
+    val snackbar = remember { HydrosSnackbarState() }
+    var permissionTarget by remember { mutableStateOf<DeviceUi?>(null) }
+    fun bluetoothGranted() = listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT).all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+    val bluetoothPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        permissionTarget?.let { target ->
+            if (bluetoothGranted()) {
+                permissionTarget = null
+                model.connect(target)
+            } else snackbar.show("请允许附近设备权限，授权后将继续连接", action = org.cqutosp.hydros.ui.components.SnackbarAction("前往设置") {
+                context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}")))
+            }, error = true)
+        }
+    }
+    fun requestConnect(device: DeviceUi) {
+        if (!state.signedIn || state.reauthentication != null) return
+        val permissions=arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        if(permissions.any { ContextCompat.checkSelfPermission(context, it)!=PackageManager.PERMISSION_GRANTED }) {
+            permissionTarget=device; bluetoothPermission.launch(permissions)
+        } else model.connect(device)
+    }
+    fun openPage(destination: String) {
+        if (state.reauthentication != null) return
+        if (!state.signedIn && destination != "session" && !destination.startsWith("legal/")) return
+        // 钱包不再是独立路由：把它当作首页 pager 的第二页，返回时也不会退回首页。
+        if (destination == "wallet") {
+            pageScope.launch {
+                if (state.feedback.reduceMotionEnabled) pageState.scrollToPage(1)
+                else pageState.animateScrollToPage(1)
+            }
+            return
+        }
+        nav.navigate(destination)
+    }
+    val speak = rememberVoiceSpeaker()
+    fun runVoiceCommand(command: VoiceCommand): String {
+        if (!state.voiceAssistantEnabled) return "智能助手已关闭，请在“我的 - 智能助手”里重新开启。"
+        if (!state.signedIn) return "请先登录 Hydros+ 再使用语音指令。"
+        return when (command) {
+            is VoiceCommand.Start -> {
+                val device = state.devices.firstOrNull {
+                    VoiceCommands.matchesDevice(it.name, it.location, command.deviceQuery)
+                } ?: state.devices.firstOrNull()
+                val session = state.session
+                when {
+                    device == null -> "还没有可用的设备，请先在首页连接设备。"
+                    session != null -> "已经有设备在使用中：" + session.device.name + "。"
+                    state.demoMode -> "当前是演示数据模式，不会真实取水。"
+                    else -> {
+                        model.start(device)
+                        "正在打开" + device.name + "。"
+                    }
+                }
+            }
+            is VoiceCommand.Stop -> {
+                if (state.session == null) "当前没有正在进行的用水。"
+                else if (state.demoMode) "当前是演示数据模式，没有真实用水可以结束。"
+                else { model.finish(); "已结束本次用水。" }
+            }
+            VoiceCommand.Balance -> {
+                if (!state.walletLoaded) model.refresh()
+                val cents = state.wallet.totalCents
+                if (cents == null) "余额暂时取不到，请稍后再试。" else "钱包余额 " + money(cents) + " 元。"
+            }
+            VoiceCommand.Consumption -> {
+                val report = state.waterUsage
+                "本月用水支出 " + money(report.totalCents) + " 元，共 " + report.sessionCount + " 次用水。"
+            }
+            VoiceCommand.Recharge -> {
+                openPage("recharge")
+                "已打开充值页面。"
+            }
+            VoiceCommand.Help -> VoiceCommands.HELP_TEXT
+            is VoiceCommand.Unknown -> "没听清“" + command.raw + "”。" + VoiceCommands.HELP_TEXT
+        }
+    }
+    var voiceRequest by rememberSaveable { mutableStateOf<String?>(null) }
+    val activity = LocalActivity.current as? ComponentActivity
+    DisposableEffect(activity) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && activity != null) {
+                val intent = activity.intent
+                val command = intent?.getStringExtra(VoiceCommands.EXTRA_COMMAND)
+                if (!command.isNullOrBlank()) {
+                    voiceRequest = command
+                    intent.removeExtra(VoiceCommands.EXTRA_COMMAND)
+                }
+            }
+        }
+        activity?.lifecycle?.addObserver(observer)
+        onDispose { activity?.lifecycle?.removeObserver(observer) }
+    }
+    var handledSession by rememberSaveable { mutableStateOf<String?>(null) }
+    var billFromSession by rememberSaveable { mutableStateOf(false) }
+    fun dismissSessionScreen() {
+        if (state.session == null) {
+            handledSession = null
+            model.dismissPostSessionNavigation()
+        }
+    }
+    fun goHome() {
+        dismissSessionScreen()
+        // popBackStack 是唯一稳定的回首页方式：navigate("home") 在 session 仍在栈顶时会因为
+        // popUpTo + singleTop + saveState 的组合被忽略，表现成“点了返回首页没反应”。
+        if (!nav.popBackStack("home", inclusive = false)) {
+            nav.navigate("home") {
+                popUpTo(nav.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+    fun back() {
+        if (state.reauthentication == null) {
+            if (nav.currentDestination?.route == "session") dismissSessionScreen()
+            nav.popBackStack()
+        }
+    }
+    val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        if (!it) snackbar.show("未开启通知权限，后台设备通知可能无法显示")
+    }
+    LaunchedEffect(state.initializing, state.signedIn, state.onboardingCompleted, state.reauthentication) {
+        if(!state.initializing && state.reauthentication == null) {
+            val currentRoute=nav.currentDestination?.route
+            val target=when {
+                !state.signedIn && !state.onboardingCompleted && currentRoute != "onboarding" -> "onboarding"
+                !state.signedIn && state.onboardingCompleted && currentRoute != "login" -> "login"
+                state.signedIn && (currentRoute == "login" || currentRoute == "onboarding") -> if (state.session != null) "session" else "home"
+                else -> null
+            }
+            if(target != null) {
+                nav.navigate(target) { popUpTo(nav.graph.id) { inclusive=true }; launchSingleTop=true }
+            }
+        }
+    }
+    AutoUpdateChecks(appInfo)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(state.reauthentication?.id, lifecycleOwner) {
+        val notice = state.reauthentication ?: return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            val ticket = snackbar.show(notice.message, error = true, protected = true) ?: return@repeatOnLifecycle
+            try {
+                if (snackbar.awaitDismissal(ticket) != SnackbarEnd.REPLACED) {
+                    nav.navigate("login") { popUpTo(nav.graph.id) { inclusive = true }; launchSingleTop = true }
+                    model.acknowledgeReauthentication(notice.id)
+                }
+            } finally {
+                snackbar.dismiss(ticket.id, SnackbarEnd.REPLACED)
+            }
+        }
+    }
+    BackHandler(state.reauthentication != null) { }
+    LaunchedEffect(state.initializing, state.session?.device?.id, state.session?.startedAt, state.session?.stage,
+        state.working, state.reauthentication, state.signedIn,
+        state.resolvingPostSessionDestination, state.postSessionBillId) {
+        if(!state.initializing && state.signedIn && state.reauthentication == null) {
+            // The durable opening intent may still receive an explicit rejection (and prepare BLE).
+            // Keep its preparation owner alive until an outcome or recovery state is available.
+            if (state.working && state.session?.stage == SessionStage.OPENING) return@LaunchedEffect
+            val sessionId=state.session?.let { "${it.device.id}:${it.startedAt}" }
+            if(sessionId != null && sessionId != handledSession) {
+                handledSession=sessionId; nav.navigate("session") { launchSingleTop=true }
+            } else if(sessionId == null && handledSession != null && state.signedIn) {
+                // The end-use destination may still be resolving a matching bill.
+                if (state.resolvingPostSessionDestination) return@LaunchedEffect
+                handledSession=null
+                val billId=state.postSessionBillId
+                if(billId != null) {
+                    model.consumePostSessionBill(); billFromSession=true
+                    nav.navigate("bill/$billId") { popUpTo("home"); launchSingleTop=true }
+                } else {
+                    if (state.postSessionDestination == PostSessionDestination.BILL)
+                        snackbar.show("未找到本次账单，已返回设备页")
+                    nav.navigate("home") { popUpTo("home"); launchSingleTop=true }
+                }
+            }
+        }
+    }
+    val primaryStates = rememberSaveableStateHolder()
+    val entry by nav.currentBackStackEntryAsState()
+    val navigationRoute = entry?.destination?.route ?: "home"
+    val route = navigationRoute
+    LaunchedEffect(entry?.id, state.signedIn) {
+        if (!state.signedIn || entry?.destination?.route != "device/{id}" ||
+            permissionTarget?.id != entry?.arguments?.getString("id")) permissionTarget = null
+    }
+    DisposableEffect(lifecycleOwner, nav, model, appInfo) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val current = nav.currentBackStackEntry
+                val deviceId = current?.arguments?.getString("id")
+                model.recoverQueries(deviceId.takeIf { current?.destination?.route == "bill/{id}" })
+                appInfo.onUpdateResumed()
+                if (bluetoothGranted() && current?.destination?.route == "device/{id}" && deviceId != null) {
+                    val pending = permissionTarget?.takeIf { it.id == deviceId }
+                    if (pending != null) { permissionTarget = null; model.connect(pending) }
+                    else model.recoverConnection(deviceId)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    BackHandler(navigationRoute == "home" && pageState.currentPage == 1 && state.reauthentication == null) {
+        pageScope.launch {
+            if (state.feedback.reduceMotionEnabled) pageState.scrollToPage(0) else pageState.animateScrollToPage(0)
+        }
+    }
+    val targetDeviceId = if (route == "device/{id}") entry?.arguments?.getString("id") else null
+    val targetDevice = targetDeviceId?.let { id -> state.devices.find { it.id == id } }
+    LaunchedEffect(entry?.id, targetDevice != null) {
+        if (targetDevice != null) requestConnect(targetDevice)
+        else if (route != "device/{id}") model.cancelConnection()
+    }
+    fun main(destination: String) {
+        if (!state.signedIn || state.reauthentication != null) return
+        if (destination == "home") {
+            // 底部的“首页”总是回到首页标签，而不是上次停留的钱包标签。
+            pageScope.launch { pageState.scrollToPage(0) }
+        }
+        if (route == destination) return
+        nav.navigate(destination) {
+            popUpTo("home") { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+    val density = LocalDensity.current
+    var mainBarHeight by remember { mutableStateOf(80.dp) }
+    val updateBarHeight: (Int) -> Unit = { mainBarHeight = with(density) { it.toDp() } }
+    val accentColor = state.accentColor?.let { Color(it) }
+    val hydrosWallpaper = remember(state.wallpaperPath, state.wallpaperDim, state.wallpaperBlur) {
+        state.wallpaperPath?.takeIf { it.isNotBlank() }?.let { WallpaperConfig(it, state.wallpaperDim, state.wallpaperBlur) }
+    }
+    HydrosTheme(
+        mode = state.theme,
+        feedback = state.feedback,
+        fontSizeScale = fontSizePreview ?: state.fontSizeScale,
+        fontSet = FontChoice.fromKey(state.fontFamily).fontSet(),
+        accent = accentColor,
+        gradientPreset = GradientPreset.fromKey(state.gradientPreset),
+        gradientEnabled = state.gradientEnabled
+    ) {
+        val pageEasing = remember { CubicBezierEasing(0.2f, 0f, 0f, 1f) }
+        val haptics = rememberHydrosHaptics()
+        var previousConnection by remember { mutableStateOf(state.connectionStage) }
+        LaunchedEffect(state.connectionStage) {
+            if (previousConnection == ConnectionStage.CONNECTING && state.connectionStage == ConnectionStage.READY) haptics.success()
+            previousConnection = state.connectionStage
+        }
+        val window = LocalActivity.current?.window
+        val lightSystemBars = MaterialTheme.colorScheme.background.luminance() > 0.5f
+        SideEffect {
+            window?.let {
+                WindowCompat.getInsetsController(it, it.decorView).apply {
+                    isAppearanceLightStatusBars = lightSystemBars
+                    isAppearanceLightNavigationBars = lightSystemBars
+                }
+            }
+        }
+        // Each destination owns its chrome so both pages retain their own bars during a back gesture.
+        CompositionLocalProvider(LocalHydrosWallpaper provides hydrosWallpaper) {
+        HydrosSnackbarProvider(snackbar, bottomPadding = if (destinations.any { it.route == route }) mainBarHeight else 0.dp) {
+            HydrosNotificationEffects(state, updates, model::dismissMessage, model::refresh, model::loadMonth, appInfo::checkForUpdates, showUpdateErrors = route != "about/update",
+                announceSession = route != "session" || state.session?.let { state.working || it.stage in listOf(SessionStage.OPENING, SessionStage.STOPPING, SessionStage.SETTLING) } != true,
+                onSession = { openPage("session") })
+            HoldActionHost {
+                Box(Modifier.fillMaxSize()) {
+                    // 语音指令面板放在主题内，否则弹层会退回 Material 默认配色。
+                    voiceRequest?.let { raw ->
+                        VoiceCommandSheet(
+                            raw = raw,
+                            onDismiss = { voiceRequest = null },
+                            onExecute = { command ->
+                                val reply = runVoiceCommand(command)
+                                speak(reply)
+                                reply
+                            },
+                        )
+                    }
+                    NavHost(
+                        // Fading only the parent over this backplate gives a subtle 10% scrim.
+                        navController = nav, startDestination = "home", modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(state.reauthentication, route) {
+                            if (state.reauthentication != null && route != "session") awaitPointerEventScope {
+                                while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                            }
+                        },
+                        // Tab changes and reduced-motion navigation have no page translation.
+                        enterTransition = {
+                            if (state.feedback.reduceMotionEnabled || isTabSwitch(initialState.destination.route, targetState.destination.route)) EnterTransition.None
+                            else slideInHorizontally(tween(300, easing = pageEasing)) { it }
+                        },
+                        exitTransition = {
+                            if (state.feedback.reduceMotionEnabled || isTabSwitch(initialState.destination.route, targetState.destination.route)) ExitTransition.None
+                            else slideOutHorizontally(tween(300, easing = pageEasing)) { -it / 5 } +
+                                fadeOut(tween(300, easing = pageEasing), targetAlpha = 0.9f)
+                        },
+                        popEnterTransition = {
+                            if (state.feedback.reduceMotionEnabled || isTabSwitch(initialState.destination.route, targetState.destination.route)) EnterTransition.None
+                            else slideInHorizontally(tween(300, easing = pageEasing)) { -it / 5 } +
+                                fadeIn(tween(300, easing = pageEasing), initialAlpha = 0.9f)
+                        },
+                        popExitTransition = {
+                            if (state.feedback.reduceMotionEnabled || isTabSwitch(initialState.destination.route, targetState.destination.route)) ExitTransition.None
+                            else slideOutHorizontally(tween(300, easing = pageEasing)) { it }
+                        },
+                    ) {
+                        composable("home") {
+                            val tabProgress = pageState.currentPage + pageState.currentPageOffsetFraction
+                            HydrosPage("首页",
+                                titleContent = {
+                                    HomeWalletTabs(progress = tabProgress, onSelect = { target ->
+                                        pageScope.launch {
+                                            if (state.feedback.reduceMotionEnabled) pageState.scrollToPage(target)
+                                            else pageState.animateScrollToPage(target)
+                                        }
+                                    })
+                                },
+                                background = if (hydrosWallpaper == null) {
+                                    { org.cqutosp.hydros.ui.components.HomeBackdrop() }
+                                } else null,
+                                bottomBar = { HydrosBottomBar("home", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight) }) {
+                                HorizontalPager(
+                                    state = pageState,
+                                    modifier = Modifier.fillMaxSize().testTag("primary-pager"),
+                                    userScrollEnabled = state.signedIn && state.reauthentication == null,
+                                    flingBehavior = rememberPrimaryPagerFlingBehavior(pageState, state.feedback.reduceMotionEnabled),
+                                ) { page ->
+                                    if (page == 0) HomeScreen(state, onScan = { openPage("scan") },
+                                        onDevice = { openPage("device/$it") },
+                                        onNearbyDevice = { openPage("device/$it") },
+                                        onSession = { openPage("session") },
+                                        onWaterReport = { openPage("water/report") },
+                                        onWallet = { openPage("wallet") },
+                                        onScanNearby = model::discoverNearby, onStopNearby = model::stopDiscovery)
+                                    else WalletScreen(state, onMonth = model::loadMonth,
+                                        onBillType = model::selectBillType,
+                                        onRefresh = model::refresh,
+                                        onBill = { billFromSession = false; openPage("bill/$it") })
+                                }
+                            }
+                        }
+                        composable("recharge") {
+                            HydrosPage("充值",
+                                background = if (hydrosWallpaper == null) {
+                                    { org.cqutosp.hydros.ui.components.HomeBackdrop() }
+                                } else null,
+                                bottomBar = { HydrosBottomBar("recharge", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight) }) {
+                                RechargeTab(thirdParty = thirdParty, context = context, snackbar = snackbar,
+                                    school = state.account.school.takeIf { it.isNotBlank() && it != "—" })
+                            }
+                        }
+                        composable("mine") {
+                            HydrosPage("我的", background = if (hydrosWallpaper == null) {
+                                { org.cqutosp.hydros.ui.components.HomeBackdrop() }
+                            } else null,
+                                bottomBar = { HydrosBottomBar("mine", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight) }) {
+                                primaryStates.SaveableStateProvider("mine") {
+                                    MineScreen(state, onRefresh = model::refresh, onManageAccount = { openPage("account") },
+                                        onAppearance = { openPage("appearance") },
+                                        onFeedback = { openPage("feedback") },
+                                        onDisplay = { openPage("display") },
+                                        onWaterReport = { openPage("water/report") },
+                                        onWaterLimit = model::waterLimit,
+                                        onUseCode = { openPage("thirdparty/usecode") },
+                                        onDorm = { openPage("thirdparty/dorm") },
+                                        onAvatarPath = model::avatarPath,
+                                        onAbout = { openPage("about") }, hasUpdate = updates.hasUpdate)
+                                }
+                            }
+                        }
+                        composable("account") {
+                            HydrosPage("管理账户", onBack = { back() }) {
+                                ManageAccountScreen(state,
+                                    onPhone = { openPage("account/PHONE") }, onPassword = { openPage("account/PASSWORD") },
+                                    onLogout = model::logout, onSession = { openPage("session") })
+                            }
+                        }
+                        composable("appearance") {
+                            HydrosPage("应用外观", onBack = { back() }) {
+                                AppearanceScreen(
+                                    theme = state.theme,
+                                    onTheme = model::theme,
+                                    fontLabel = FontChoice.fromKey(state.fontFamily).label,
+                                    gradientLabel = if (!state.gradientEnabled) "纯色背景" else GradientPreset.fromKey(state.gradientPreset).label,
+                                    accentLabel = state.accentColor?.let { "自定义 #%06X".format(it and 0xFFFFFF) } ?: "跟随主题",
+                                    wallpaperOn = !state.wallpaperPath.isNullOrBlank(),
+                                    iconLabel = when (AppIconController.currentAppIcon(context)) {
+                                        "QZXY" -> "趣智校园"
+                                        "CUSTOM" -> "自定义图片"
+                                        else -> "默认图标"
+                                    },
+                                    onOpenFont = { openPage("appearance/font") },
+                                    onOpenThemeColor = { openPage("appearance/theme-color") },
+                                    onOpenAccent = { openPage("appearance/accent") },
+                                    onOpenWallpaper = { openPage("appearance/wallpaper") },
+                                    onOpenIcon = { openPage("appearance/icon") },
+                                )
+                            }
+                        }
+                        composable("appearance/font") {
+                            HydrosPage("字体", onBack = { back() }) {
+                                FontSettingsScreen(state.fontFamily, onSelect = model::fontFamily)
+                            }
+                        }
+                        composable("appearance/theme-color") {
+                            HydrosPage("主题色", onBack = { back() }) {
+                                ThemeColorScreen(state.gradientPreset, state.gradientEnabled, model::gradientPreset, model::gradientEnabled)
+                            }
+                        }
+                        composable("appearance/accent") {
+                            HydrosPage("强调色", onBack = { back() }) {
+                                AccentColorScreen(state.accentColor, onAccent = model::accentColor)
+                            }
+                        }
+                        composable("appearance/wallpaper") {
+                            val wallpaperScope = rememberCoroutineScope()
+                            val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
+                                if (picked != null) wallpaperScope.launch {
+                                    val saved = runCatching { storeWallpaperFile(context, picked) }.getOrNull()
+                                    if (saved != null) {
+                                        model.wallpaperPath(saved)
+                                        snackbar.show("壁纸已更新")
+                                    } else {
+                                        snackbar.show("无法读取这张图片，请换一张试试")
+                                    }
+                                }
+                            }
+                            HydrosPage("背景壁纸", onBack = { back() }) {
+                                WallpaperScreen(
+                                    path = state.wallpaperPath,
+                                    dim = state.wallpaperDim,
+                                    blur = state.wallpaperBlur,
+                                    onPick = { wallpaperPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                    onClear = { model.wallpaperPath(null); snackbar.show("已恢复渐变背景") },
+                                    onDim = model::wallpaperDim,
+                                    onBlur = model::wallpaperBlur,
+                                )
+                            }
+                        }
+                        composable("appearance/icon") {
+                            var iconKey by remember { mutableStateOf(AppIconController.currentAppIcon(context)) }
+                            var hasCustomIcon by remember { mutableStateOf(AppIconController.hasCustomIcon(context)) }
+                            var customBitmap by remember { mutableStateOf(AppIconController.customIconBitmap(context)) }
+                            val iconScope = rememberCoroutineScope()
+                            val iconPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
+                                if (picked != null) iconScope.launch {
+                                    val saved = runCatching { AppIconController.saveCustomIcon(context, picked) }.getOrNull()
+                                    hasCustomIcon = saved != null
+                                    customBitmap = AppIconController.customIconBitmap(context)
+                                    if (saved != null) {
+                                        val pinned = AppIconController.requestPinnedCustomIcon(context, "Hydros+")
+                                        iconKey = AppIconKeys.CUSTOM
+                                        snackbar.show(
+                                            if (pinned) "已请求添加带自定义图标的桌面快捷方式"
+                                            else "图片已保存，但当前桌面不支持固定快捷方式"
+                                        )
+                                    } else {
+                                        snackbar.show("无法读取这张图片，请换一张试试")
+                                    }
+                                }
+                            }
+                            HydrosPage("桌面图标", onBack = { back() }) {
+                                AppIconScreen(
+                                    current = iconKey,
+                                    hasCustom = hasCustomIcon,
+                                    customIcon = customBitmap,
+                                    onSelect = { key ->
+                                        if (key == AppIconKeys.CUSTOM) {
+                                            val pinned = AppIconController.requestPinnedCustomIcon(context, "Hydros+")
+                                            snackbar.show(
+                                                if (pinned) "已请求添加带自定义图标的桌面快捷方式"
+                                                else if (!hasCustomIcon) "请先从相册选择一张图片"
+                                                else "当前桌面不支持固定快捷方式"
+                                            )
+                                        } else {
+                                            AppIconController.apply(context, key)
+                                            iconKey = AppIconController.currentAppIcon(context)
+                                            snackbar.show("已切换桌面图标，部分桌面需要重启应用后才刷新")
+                                        }
+                                    },
+                                    onPickCustom = {
+                                        iconPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                    },
+                                )
+                            }
+                        }
+                        composable("feedback") {
+                            HydrosPage("反馈设置", onBack = { back() }) {
+                                FeedbackSettingsScreen(state.feedback, onHaptic = model::hapticFeedback, onReduceMotion = model::reduceMotion)
+                            }
+                        }
+                        composable("display") {
+                            HydrosPage("显示设置", onBack = { back() }) {
+                                DisplaySettingsScreen(state.fontSizeScale, onPreview = { fontSizePreview = it }, onSave = model::fontSizeScale,
+                                    postSessionDestination = state.postSessionDestination, onPostSessionDestination = model::postSessionDestination,
+                                    homeConnectCardVisible = state.homeConnectCardVisible,
+                                    onHomeConnectCardVisible = model::homeConnectCardVisible)
+                            }
+                        }
+                        composable("thirdparty/usecode") {
+                            HydrosPage("使用码", onBack = { back() }) {
+                                // 移植的 UseCodeScreen 自身不带首次加载，进入页面时补一次拉取。
+                                LaunchedEffect(Unit) { thirdParty.refreshUseCode() }
+                                DisposableEffect(Unit) { onDispose { thirdParty.clearUseCode() } }
+                                val useCodeFlow = thirdParty.useCode
+                                if (useCodeFlow == null) {
+                                    InlineState("当前无法查看使用码", "未获取到校园网关连接，请稍后重试。", icon = R.drawable.ic_code)
+                                } else {
+                                    val ui by useCodeFlow.collectAsStateWithLifecycle()
+                                    UseCodeScreen(ui, onRefresh = thirdParty::refreshUseCode,
+                                        onSetEnabled = thirdParty::setUseCodeEnabled,
+                                        onGenerate = thirdParty::generateUseCode,
+                                        onClaim = thirdParty::claimUseCode)
+                                }
+                            }
+                        }
+                        composable("thirdparty/dorm") {
+                            HydrosPage("绑定寝室", onBack = { back() }) {
+                                val dorm by thirdParty.dorm.collectAsStateWithLifecycle()
+                                // 默认扫描附近蓝牙设备，用户优先从列表里选，输入法只是备选。
+                                LaunchedEffect(Unit) { model.discoverNearby() }
+                                DormBindingScreen(dorm.bound, dorm.editing, dorm.error,
+                                    onSave = thirdParty::saveDorm, onClear = thirdParty::clearDorm,
+                                    nearbyDevices = state.nearby.devices.map { device ->
+                                        DormNearbyDevice(
+                                            id = device.id,
+                                            name = device.name,
+                                            mac = device.connectMac.ifBlank { device.ledgerMac },
+                                            location = device.location,
+                                        )
+                                    },
+                                    nearbySearching = state.nearby.searching,
+                                    onScanNearby = model::discoverNearby)
+                            }
+                        }
+                        composable("thirdparty/recharge") {
+                            HydrosPage("充值", onBack = { back() }) {
+                                val rechargeFlow = thirdParty.recharge
+                                if (rechargeFlow == null) {
+                                    InlineState("当前无法充值", "未获取到校园网关连接，请稍后重试。", icon = R.drawable.ic_wallet)
+                                } else {
+                                    val ui by rechargeFlow.collectAsStateWithLifecycle()
+                                    val pendingFlow = thirdParty.pendingRechargeOrder
+                                    val pending = if (pendingFlow == null) null else pendingFlow.collectAsStateWithLifecycle().value
+                                    RechargeScreen(ui, pending,
+                                        onOpen = thirdParty::openRecharge,
+                                        onRefresh = thirdParty::refreshRecharge,
+                                        onSelectPackage = thirdParty::selectRechargePackage,
+                                        onSelectChannel = thirdParty::selectRechargeChannel,
+                                        onSubmit = thirdParty::submitRecharge,
+                                        onConsumeOrder = { thirdParty.consumeRechargeOrder() },
+                                        onPaymentResult = {})
+                                    LaunchedEffect(pending) {
+                                        val order = pending ?: return@LaunchedEffect
+                                        when (order) {
+                                            is RechargeOrder.Browser -> {
+                                                val opened = runCatching {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(order.url)))
+                                                }.isSuccess
+                                                if (!opened) snackbar.show("无法打开支付页面，请检查是否已安装浏览器")
+                                            }
+                                            is RechargeOrder.Alipay -> {
+                                                // PayTask 会阻塞到用户在支付宝里返回结果，交给 launcher 内部切 IO 线程。
+                                                snackbar.show("正在拉起支付宝…")
+                                                val result = launchAlipayOrder(context, order.orderInfo)
+                                                thirdParty.completeRechargePayment(result)
+                                                snackbar.show(result.label)
+                                                if (result == AlipayResult.SUCCESS) thirdParty.refreshRechargeBalance()
+                                            }
+                                        }
+                                        thirdParty.consumeRechargeOrder()
+                                    }
+                                }
+                            }
+                        }
+                        composable("voice") {
+                            HydrosPage("智能助手", onBack = { back() }) {
+                                VoiceAssistantScreen(
+                                    enabled = state.voiceAssistantEnabled,
+                                    onEnabled = model::voiceAssistantEnabled,
+                                    onTest = { command ->
+                                        val reply = runVoiceCommand(VoiceCommands.parse(command))
+                                        speak(reply)
+                                        snackbar.show(reply)
+                                    },
+                                )
+                            }
+                        }
+                        composable("water/report") {
+                            HydrosPage("智能用水报告", onBack = { back() }) {
+                                WaterReportScreen(
+                                    report = state.waterUsage,
+                                    limitCents = state.waterLimitCents,
+                                    onWaterLimit = model::waterLimit,
+                                    onMonth = { selected -> model.loadMonth(selected.toString()) },
+                                )
+                            }
+                        }
+                        composable("about") {
+                            HydrosPage("关于 Hydros+", onBack = { back() }) {
+                                AboutScreen(updates, onUpdates = { openPage("about/update") },
+                                    onLicenses = { openPage("about/licenses") },
+                                    onProjectLicense = { openPage("about/licenses/project") },
+                                    onTerms = { openPage("legal/terms") },
+                                    onPrivacy = { openPage("legal/privacy") },
+                                    onDeveloper = { openPage("about/developer") },
+                                    appData = appData,
+                                    onClear = { model.clearAllData(appData::clearAllData) })
+                            }
+                        }
+                        composable("about/update") {
+                            HydrosPage("软件更新", onBack = { back() }) {
+                                LaunchedEffect(Unit) { appInfo.checkForUpdates() }
+                                SoftwareUpdateScreen(updates, onHistory = { openPage("about/releases") },
+                                    onInstall = appInfo::installUpdate,
+                                    onContinue = { appInfo.continueInstall { intent ->
+                                        if (runCatching { context.startActivity(intent) }.isFailure) appInfo.restoreUpdateLaunchIntent(intent)
+                                    } },
+                                    onCancel = appInfo::cancelInstall, onCheck = appInfo::checkForUpdates)
+                            }
+                        }
+                        composable("about/releases") {
+                            LaunchedEffect(Unit) { if (!history.loaded) appInfo.loadHistory() }
+                            HydrosPage("更新历史", onBack = { back() }) {
+                                ReleaseHistoryScreen(history, onRelease = { openPage("about/releases/${android.net.Uri.encode(it.tag)}") },
+                                    onLoad = { appInfo.loadHistory() })
+                            }
+                        }
+                        composable("about/releases/{tag}") { entry ->
+                            val tag = entry.arguments?.getString("tag").orEmpty()
+                            LaunchedEffect(tag) { appInfo.loadRelease(tag) }
+                            HydrosPage(detail.releases.firstOrNull()?.name ?: tag, onBack = { back() }) {
+                                detail.releases.firstOrNull()?.let { ReleaseDetailScreen(it) }
+                                    ?: ReleaseHistoryScreen(detail, onRelease = {}, onLoad = { appInfo.loadRelease(tag) })
+                            }
+                        }
+                        composable("about/developer") {
+                            HydrosPage("开发者页面", onBack = { back() }) {
+                                var confirmClear by remember { mutableStateOf(false) }
+                                DeveloperScreen(
+                                    demoMode = state.demoMode,
+                                    onDemoMode = model::demoMode,
+                                    onOpenLogs = { openPage("about/developer/logs") },
+                                    buildInfo = listOf(
+                                        "版本" to BuildConfig.VERSION_NAME,
+                                        "构建时间" to BuildConfig.BUILD_TIME,
+                                        "Android SDK" to Build.VERSION.SDK_INT.toString(),
+                                        "系统版本" to Build.VERSION.RELEASE,
+                                        "机型" to (Build.MANUFACTURER + " " + Build.MODEL),
+                                        "应用 ID" to BuildConfig.APPLICATION_ID,
+                                    ),
+                                    onCopyBuildInfo = {
+                                        val text = listOf(
+                                            "Hydros+ " + BuildConfig.VERSION_NAME,
+                                            "构建时间 " + BuildConfig.BUILD_TIME,
+                                            "Android " + Build.VERSION.RELEASE + " (SDK " + Build.VERSION.SDK_INT + ")",
+                                            "机型 " + Build.MANUFACTURER + " " + Build.MODEL,
+                                        ).joinToString("\n")
+                                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                                        clipboard?.setPrimaryClip(ClipData.newPlainText("Hydros+ 构建信息", text))
+                                        snackbar.show("构建信息已复制")
+                                    },
+                                    onResetOnboarding = model::resetOnboarding,
+                                    onClearData = { confirmClear = true },
+                                    devices = state.devices,
+                                    onAddDemoDevice = model::addDemoDevice,
+                                    onUpdateDemoDevice = model::updateDemoDevice,
+                                    onRemoveDemoDevice = model::removeDemoDevice,
+                                    voiceAssistantEnabled = state.voiceAssistantEnabled,
+                                    onOpenVoiceAssistant = { openPage("voice") },
+                                )
+                                if (confirmClear) {
+                                    AlertDialog(
+                                        onDismissRequest = { confirmClear = false },
+                                        title = { Text("清除所有数据？") },
+                                        text = { Text("会退出登录并清空本地设置、收藏与日志，此操作不可撤销。") },
+                                        confirmButton = {
+                                            TextButton(onClick = {
+                                                confirmClear = false
+                                                if (model.clearAllData(appData::clearAllData)) snackbar.show("已清除所有数据")
+                                            }) { Text("清除") }
+                                        },
+                                        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("取消") } },
+                                    )
+                                }
+                            }
+                        }
+                        composable("about/developer/logs") {
+                            HydrosPage("应用日志", onBack = { back() }) {
+                                var logLines by remember { mutableStateOf(HydrosLog.snapshot()) }
+                                AppLogsScreen(
+                                    logs = logLines,
+                                    onRefresh = {
+                                        logLines = HydrosLog.snapshot()
+                                        snackbar.show("已刷新日志（" + logLines.size + " 条）")
+                                    },
+                                    onClear = {
+                                        model.clearLogs()
+                                        logLines = emptyList()
+                                        snackbar.show("日志已清空")
+                                    },
+                                )
+                            }
+                        }
+                        composable("about/licenses") {
+                            HydrosPage("开源许可", onBack = { back() }) {
+                                LicensesIndexScreen(onProject = { openPage("about/licenses/project") },
+                                    onThirdParty = { openPage("about/licenses/third-party") })
+                            }
+                        }
+                        composable("about/licenses/project") {
+                            HydrosPage("本项目许可证", onBack = { back() }) { ProjectLicenseScreen() }
+                        }
+                        composable("about/licenses/third-party") {
+                            HydrosPage("第三方依赖许可证", onBack = { back() }) { OpenSourceLicensesScreen() }
+                        }
+                        composable("legal/terms") {
+                            HydrosPage("服务协议", onBack = { back() }) {
+                                LegalDocumentScreen(LegalDocuments.TERMS_OF_SERVICE, terms)
+                            }
+                        }
+                        composable("legal/privacy") {
+                            HydrosPage("隐私政策", onBack = { back() }) {
+                                LegalDocumentScreen(LegalDocuments.PRIVACY_POLICY, privacy)
+                            }
+                        }
+                        composable("onboarding") {
+                            OnboardingScreen(
+                                onComplete = model::completeOnboarding,
+                                onTerms = { openPage("legal/terms") },
+                                onPrivacy = { openPage("legal/privacy") }
+                            )
+                        }
+                        composable("login") {
+                            HydrosPage("登录") {
+                                LoginScreen(
+                                    onSend = { model.sendCode(it, 3) },
+                                    onLogin = model::login,
+                                    loginRetryAfterMillis = { model.graph.auth.loginRetryAfterMillis },
+                                    initialPhone = state.lastAccount.orEmpty(),
+                                    footer = {
+                                        if (state.session != null) {
+                                            Row(
+                                                Modifier.fillMaxWidth().padding(top = 8.dp),
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                TextButton(onClick = { openPage("session") }) {
+                                                    Text("返回当前设备，关闭或恢复使用")
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        composable("device/{id}") { backStack ->
+                            val device = state.devices.find { it.id == backStack.arguments?.getString("id") }
+                            HydrosPage("设备详情", onBack = { back() }) {
+                                DeviceDetailScreen(device, state, ::requestConnect, onStart = {
+                                    if (Build.VERSION.SDK_INT >= 33) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    model.start(it)
+                                }, onSession = { openPage("session") }, onBack = { back() }, onFavorite = model::toggleFavorite, onSaveRemark = model::saveDeviceRemark)
+                            }
+                        }
+                        composable("scan") {
+                            // 扫码页自带沉浸式黑色外壳（返回、手电筒、取景框都在页面里），不再套 HydrosPage 的白色顶栏。
+                            ScanScreen(onResolve = model::scan, enabled = state.signedIn && state.reauthentication == null,
+                                queryProgress = state.networkMessage,
+                                onSelect = { openPage("device/$it") })
+                        }
+                        composable("session") {
+                            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary)) {
+                                Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.16f))
+                                                .clickable { back() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Glyph(R.drawable.ic_back, modifier = Modifier.size(20.dp), tint = Color.White, description = "返回")
+                                        }
+                                        Spacer(Modifier.width(10.dp))
+                                        Text("设备使用", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                                    }
+                                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                                        SessionScreen(state.session, onFinish = model::finish, onHome = { goHome() }, remarks = state.deviceRemarks, working = state.working, observation = state.observation,
+                                            resolvingDestination = state.resolvingPostSessionDestination)
+                                    }
+                                }
+                            }
+                        }
+                        composable("bill/{id}") { backStack ->
+                            val billId = backStack.arguments?.getString("id")
+                            LaunchedEffect(backStack.id) { billId?.let(model::loadDetail) }
+                            HydrosPage("账单详情", onBack = { back() }) {
+                                val currentBill = billId?.let { id ->
+                                    state.billDetail?.takeIf { it.id == id } ?: state.bills.find { it.id == id }
+                                }
+                                val detailSync = billId?.let { state.billDetailSync[it] }
+                                BillDetailScreen(
+                                    bill = currentBill,
+                                    onWallet = { if (state.reauthentication == null) { if (billFromSession) goHome() else nav.popBackStack("home", inclusive = false) } },
+                                    backLabel = if (billFromSession) "返回首页" else "返回钱包",
+                                    durationPending = currentBill != null && !currentBill.recharge &&
+                                        currentBill.durationText == null && detailSync?.fetching == true,
+                                    error = detailSync?.error,
+                                    onRetry = { billId?.let { model.loadDetail(it, force = true) } },
+                                )
+                            }
+                        }
+                        composable("account/{form}") { backStack ->
+                            val form = AccountForm.valueOf(backStack.arguments!!.getString("form")!!)
+                            HydrosPage(form.title, onBack = { back() }) {
+                                AccountFormScreen(form, state.account, onSend = model::sendCode) { phone, old, password, code ->
+                                    val saved = model.saveAccount(form, phone, old, password, code)
+                                    if (saved && form != AccountForm.PHONE) back()
+                                    saved
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        }
+    }
+}
+
+/** 顶部一级标签：首页 / 钱包。progress 是 pager 的连续位置（0..1），跟随手势平滑过渡。 */
+@Composable
+internal fun HomeWalletTabs(progress: Float, onSelect: (Int) -> Unit) {
+    val haptics = rememberHydrosHaptics()
+    val colors = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val density = LocalDensity.current
+    val position = progress.coerceIn(0f, 1f)
+    val tabWidth = with(density) { typography.headlineMedium.fontSize.toDp() * 2 + 20.dp }
+    val indicatorHeight = with(density) { typography.headlineLarge.lineHeight.toDp() }
+    Column(Modifier.testTag("primary-switcher")) {
+    Row(
+        Modifier.height(indicatorHeight),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        listOf("首页" to 0, "钱包" to 1).forEach { (label, index) ->
+            val emphasis = (1f - kotlin.math.abs(position - index)).coerceIn(0f, 1f)
+            val selected = (position >= 0.5f) == (index == 1)
+            Box(
+                Modifier.width(tabWidth).fillMaxHeight()
+                    .selectable(selected = selected, role = Role.Tab, onClick = {
+                        if (!selected) {
+                            haptics.medium()
+                            onSelect(index)
+                        }
+                    }),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    label,
+                    modifier = Modifier.testTag("primary-title-" + if (index == 0) "home" else "wallet"),
+                    style = typography.headlineLarge,
+                    fontSize = androidx.compose.ui.unit.lerp(typography.headlineMedium.fontSize, typography.headlineLarge.fontSize, emphasis),
+                    fontWeight = FontWeight.Bold,
+                    color = androidx.compose.ui.graphics.lerp(colors.onSurfaceVariant, colors.onSurface, emphasis),
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+    Box(
+        Modifier.fillMaxWidth().padding(top = 4.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            Modifier
+                .offset(x = tabWidth * position + (tabWidth - 28.dp) / 2)
+                .size(width = 28.dp, height = 2.dp)
+                .testTag("primary-tab-indicator")
+                .clip(CircleShape)
+                .background(colors.primary)
+        )
+    }
+    }
+}
+
+/** 液态玻璃底部导航：透明胶囊 + 选中弹簧动效 + 右下角扫码渐变按钮。 */
+@Composable
+internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan: () -> Unit, onHeight: (Int) -> Unit) {
+    val haptics = rememberHydrosHaptics()
+    val density = LocalDensity.current
+    val dark = isDarkScheme()
+    val barHeight = 52.dp
+    Box(
+        Modifier.fillMaxWidth()
+            .onSizeChanged { onHeight(it.height + with(density) { 12.dp.roundToPx() }) }
+            .testTag("main-bottom-bar")
+    ) {
+        Row(
+            Modifier.fillMaxWidth().navigationBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                Modifier.weight(1f).height(barHeight)
+                    .shadow(16.dp, RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(if (dark) Color(0x29FFFFFF) else Color(0x61FFFFFF))
+                    .border(0.8.dp, if (dark) Color(0x1FFFFFFF) else Color(0x66FFFFFF), RoundedCornerShape(999.dp))
+            ) {
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    destinations.forEach { destination ->
+                        val selected = route == destination.route
+                        val scale by animateFloatAsState(
+                            targetValue = if (selected) 1f else 0f,
+                            animationSpec = spring(dampingRatio = 0.52f, stiffness = 360f),
+                            label = "tab-" + destination.route
+                        )
+                        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(0.82f)
+                                    .height(40.dp)
+                                    .graphicsLayer {
+                                        scaleX = 0.9f + 0.1f * scale
+                                        scaleY = 0.9f + 0.1f * scale
+                                        alpha = 0.85f + 0.15f * scale
+                                    }
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.13f * scale)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Glyph(
+                                        if (selected) destination.icon else destination.iconOutline,
+                                        modifier = Modifier.size((21 + 2 * scale).dp),
+                                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        description = destination.label
+                                    )
+                                    Text(
+                                        destination.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                            Box(
+                                Modifier.matchParentSize().clip(RoundedCornerShape(999.dp)).selectable(
+                                    selected = selected,
+                                    role = Role.Tab,
+                                    onClick = { if (!selected) { haptics.medium(); onNavigate(destination.route) } }
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+            Box(
+                Modifier
+                    .size(56.dp)
+                    .shadow(14.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(IosTokens.FabStart, IosTokens.FabEnd)))
+                    .clickable { haptics.light(); onScan() }
+                    .testTag("scan-action"),
+                contentAlignment = Alignment.Center
+            ) {
+                Glyph(R.drawable.ic_scan, modifier = Modifier.size(24.dp), tint = Color.White, description = "扫码")
+            }
+        }
+    }
+}
+
+/** 底部“充值”标签页的内容：余额 + 套餐 + 支付方式，并处理支付跳转。 */
+@Composable
+private fun RechargeTab(
+    thirdParty: ThirdPartyViewModel,
+    context: android.content.Context,
+    snackbar: HydrosSnackbarState,
+    school: String?
+) {
+    val rechargeFlow = thirdParty.recharge
+    val pendingFlow = thirdParty.pendingRechargeOrder
+    if (rechargeFlow == null) {
+        InlineState("当前无法充值", "未获取到校园网关连接，请稍后重试。", icon = R.drawable.ic_wallet)
+        return
+    }
+    val ui by rechargeFlow.collectAsStateWithLifecycle()
+    val pending = pendingFlow?.collectAsStateWithLifecycle()?.value
+    RechargeScreen(
+        ui = ui,
+        pendingOrder = pending,
+        onOpen = thirdParty::openRecharge,
+        onRefresh = thirdParty::refreshRecharge,
+        onSelectPackage = thirdParty::selectRechargePackage,
+        onSelectChannel = thirdParty::selectRechargeChannel,
+        onSubmit = thirdParty::submitRecharge,
+        onConsumeOrder = thirdParty::consumeRechargeOrder,
+        onPaymentResult = {},
+        merchant = school
+    )
+    LaunchedEffect(pending) {
+        val order = pending ?: return@LaunchedEffect
+        when (order) {
+            is RechargeOrder.Browser -> {
+                val opened = runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(order.url)))
+                }.isSuccess
+                if (!opened) snackbar.show("无法打开支付页面，请检查是否已安装浏览器")
+                thirdParty.consumeRechargeOrder()
+            }
+            is RechargeOrder.Alipay -> {
+                val result = launchAlipayOrder(context, order.orderInfo)
+                thirdParty.consumeRechargeOrder()
+                thirdParty.refreshRechargeBalance()
+                snackbar.show(result.label)
+            }
+        }
+    }
+}
+
+/** 把相册选中的图片复制到应用私有目录，返回可直接给壁纸渲染使用的绝对路径。 */
+private fun storeWallpaperFile(context: android.content.Context, uri: Uri): String? {
+    val target = java.io.File(context.filesDir, "wallpaper_src.img")
+    val input = context.contentResolver.openInputStream(uri) ?: return null
+    return runCatching {
+        input.use { source -> target.outputStream().use { output -> source.copyTo(output) } }
+        target.absolutePath
+    }.getOrNull()
+}
+
+/** 简易 TTS 播报；初始化失败时静默降级，界面上的文字提示仍然可见。 */
+@Composable
+private fun rememberVoiceSpeaker(): (String) -> Unit {
+    val context = LocalContext.current
+    val engineRef = remember { mutableStateOf<TextToSpeech?>(null) }
+    DisposableEffect(Unit) {
+        var engine: TextToSpeech? = null
+        engine = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) engineRef.value = engine else engine?.shutdown()
+        }
+        engineRef.value = engine
+        onDispose {
+            engine?.stop()
+            engine?.shutdown()
+            engineRef.value = null
+        }
+    }
+    return remember {
+        { text: String ->
+            engineRef.value?.let { engine ->
+                engine.setLanguage(java.util.Locale.SIMPLIFIED_CHINESE)
+                engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "hydros-voice")
+            }
+        }
+    }
+}
+
+/** 语音指令确认面板：先展示解析结果，用户点执行后才真正操作设备。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VoiceCommandSheet(raw: String, onDismiss: () -> Unit, onExecute: (VoiceCommand) -> String) {
+    val command = remember(raw) { VoiceCommands.parse(raw) }
+    var reply by remember(raw) { mutableStateOf<String?>(null) }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("语音指令", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "“" + raw + "”",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                VoiceCommands.describe(command),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            reply?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            PrimaryAction(
+                label = if (reply == null) "执行" else "已完成",
+                icon = R.drawable.ic_mic,
+                enabled = reply == null,
+                onClick = { reply = onExecute(command) },
+            )
+            TextAction("关闭", onClick = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally))
+        }
+    }
+}

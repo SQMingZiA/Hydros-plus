@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".preview.ScreenPreviewActivity"
+            android:label="Hydros 单页预览"
+            android:exported="true" />
+    </application>
+</manifest>
