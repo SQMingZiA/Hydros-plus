@@ -55,18 +55,32 @@ fun interface AppUpdateSource {
 class GitHubAppUpdates(
     private val client: OkHttpClient = OkHttpClient.Builder().retryOnConnectionFailure(false).callTimeout(15, TimeUnit.SECONDS).build(),
     private val endpoint: String = "https://api.github.com/repos/$HYDROS_GITHUB_REPO/releases/latest",
+    private val manifest: AppUpdateSource = ManifestAppUpdates(HYDROS_GITHUB_MANIFEST, UpdateSource.GITHUB),
 ) : AppUpdateSource {
-    override suspend fun latest(): AppRelease? = withContext(Dispatchers.IO) {
+    /** API 有匿名额度（本次发版已撞到 403），失败时回落到仓库里的 update.json。 */
+    override suspend fun latest(): AppRelease? =
+        runCatching { latestFromApi() }.getOrNull() ?: manifest.latest()
+
+    override suspend fun history(page: Int): ReleasePage {
+        val fromApi = runCatching { historyFromApi(page) }.getOrNull()
+        if (fromApi != null && (fromApi.releases.isNotEmpty() || page > 1)) return fromApi
+        return manifest.history(page)
+    }
+
+    override suspend fun release(tag: String): AppRelease? =
+        runCatching { releaseFromApi(tag) }.getOrNull() ?: manifest.release(tag)
+
+    private suspend fun latestFromApi(): AppRelease? = withContext(Dispatchers.IO) {
         request(endpoint, allowMissing = true)?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITHUB) } }
     }
 
-    override suspend fun history(page: Int): ReleasePage = withContext(Dispatchers.IO) {
+    private suspend fun historyFromApi(page: Int): ReleasePage = withContext(Dispatchers.IO) {
         require(page > 0)
         val entries = parseUpdateData { request("${endpoint.removeSuffix("/latest")}?per_page=30&page=$page")!!.jsonArray }
         ReleasePage(entries.mapNotNull { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITHUB) } }, entries.size == 30)
     }
 
-    override suspend fun release(tag: String): AppRelease? = withContext(Dispatchers.IO) {
+    private suspend fun releaseFromApi(tag: String): AppRelease? = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(tag, "UTF-8").replace("+", "%20")
         request("${endpoint.removeSuffix("/latest")}/tags/$encoded", allowMissing = true)?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITHUB) } }
     }
@@ -115,14 +129,28 @@ class GitHubAppUpdates(
 class GiteeAppUpdates(
     private val client: OkHttpClient = OkHttpClient.Builder().retryOnConnectionFailure(false).callTimeout(15, TimeUnit.SECONDS).build(),
     private val apiBase: String = HYDROS_GITEE_API,
+    private val manifest: AppUpdateSource = ManifestAppUpdates(HYDROS_GITEE_MANIFEST, UpdateSource.GITEE),
 ) : AppUpdateSource {
-    override suspend fun latest(): AppRelease? = withContext(Dispatchers.IO) {
-        request("$apiBase/releases/latest", allowMissing = true)
-            ?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITEE) } }
-            ?: history(1).releases.firstOrNull()
+    /** 索引文件优先（Gitee 的匿名 API 很容易被限流），失败再退回 API。 */
+    override suspend fun latest(): AppRelease? =
+        runCatching { manifest.latest() }.getOrNull() ?: apiLatest()
+
+    override suspend fun history(page: Int): ReleasePage {
+        val fromManifest = runCatching { manifest.history(page) }.getOrNull()
+        if (fromManifest != null && (fromManifest.releases.isNotEmpty() || page > 1)) return fromManifest
+        return apiHistory(page)
     }
 
-    override suspend fun history(page: Int): ReleasePage = withContext(Dispatchers.IO) {
+    override suspend fun release(tag: String): AppRelease? =
+        runCatching { manifest.release(tag) }.getOrNull() ?: apiRelease(tag)
+
+    private suspend fun apiLatest(): AppRelease? = withContext(Dispatchers.IO) {
+        request("$apiBase/releases/latest", allowMissing = true)
+            ?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITEE) } }
+            ?: apiHistory(1).releases.firstOrNull()
+    }
+
+    private suspend fun apiHistory(page: Int): ReleasePage = withContext(Dispatchers.IO) {
         require(page > 0)
         val entries = parseUpdateData {
             request("$apiBase/releases?per_page=30&page=$page&direction=desc")?.jsonArray
@@ -130,7 +158,7 @@ class GiteeAppUpdates(
         ReleasePage(entries.mapNotNull { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITEE) } }, entries.size == 30)
     }
 
-    override suspend fun release(tag: String): AppRelease? = withContext(Dispatchers.IO) {
+    private suspend fun apiRelease(tag: String): AppRelease? = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(tag, "UTF-8").replace("+", "%20")
         request("$apiBase/releases/tags/$encoded", allowMissing = true)
             ?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITEE) } }

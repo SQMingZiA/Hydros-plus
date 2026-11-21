@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.cqutosp.hydros.R
 import org.cqutosp.hydros.data.messages.CampusMessage
 import org.cqutosp.hydros.ui.components.GlassIconButton
@@ -28,6 +30,7 @@ import org.cqutosp.hydros.ui.components.Glyph
 import org.cqutosp.hydros.ui.components.InlineState
 import org.cqutosp.hydros.ui.components.MessageBody
 import org.cqutosp.hydros.ui.components.PageColumn
+import org.cqutosp.hydros.ui.components.SubtleDivider
 import org.cqutosp.hydros.ui.components.TextAction
 import org.cqutosp.hydros.ui.components.hydrosPressable
 import org.cqutosp.hydros.ui.components.htmlToPlainText
@@ -159,26 +162,64 @@ fun CampusMessageDetailScreen(
     onRead: (CampusMessage) -> Unit = {},
 ) {
     LaunchedEffect(message?.revision) { message?.let(onRead) }
+    val colors = MaterialTheme.colorScheme
     PageColumn {
         if (message == null) {
             InlineState("消息不存在", "可能已被服务端撤回，返回列表看看其他消息。", icon = R.drawable.ic_message_circle)
         } else {
-            Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 标题区：日期与公告标签同一行，标题独占一行，下面用发丝线与正文分开。
+            Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        message.publishedLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(colors.primary.copy(alpha = 0.10f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            "校园通知",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.primary,
+                        )
+                    }
+                }
                 Text(
                     message.title,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    message.publishedLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = colors.onSurface,
+                    lineHeight = 30.sp,
+                    modifier = Modifier.padding(top = 10.dp),
                 )
             }
-            Box(Modifier.padding(top = 12.dp).fillMaxWidth()) {
-                MessageBody(message.body.ifBlank { message.summary })
+            SubtleDivider(horizontalPadding = 0.dp, modifier = Modifier.padding(top = 18.dp))
+            val body = message.body.ifBlank { message.summary }
+            if (body.isBlank()) {
+                Box(Modifier.padding(top = 20.dp).fillMaxWidth()) {
+                    InlineState(title = "这条消息没有正文", icon = R.drawable.ic_message_circle)
+                }
+            } else {
+                Box(Modifier.padding(top = 16.dp, bottom = 24.dp).fillMaxWidth()) {
+                    MessageBody(body, skipTitle = message.title)
+                }
             }
+            Text(
+                "消息来自校园网关，只在本机缓存",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
         }
     }
 }

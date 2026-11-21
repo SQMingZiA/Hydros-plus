@@ -67,6 +67,7 @@ import org.cqutosp.hydros.ui.components.LocalHydrosSnackbar
 import org.cqutosp.hydros.ui.components.SnackbarAction
 import org.cqutosp.hydros.ui.components.SnackbarMessage
 import org.cqutosp.hydros.ui.components.rememberHydrosHaptics
+import org.cqutosp.hydros.ui.theme.LocalFeedbackSettings
 import org.cqutosp.hydros.ui.scanner.*
 import kotlinx.coroutines.CancellationException
 import kotlin.math.min
@@ -709,13 +710,16 @@ private fun ScanCameraNotice(
  */
 @Composable
 private fun ScanOverlay(modifier: Modifier) {
+    // 减少动画效果时停在中间位置，不再循环滑动。
+    val reduceMotion = LocalFeedbackSettings.current.reduceMotionEnabled
     val transition = rememberInfiniteTransition(label = "scan-line")
-    val progress by transition.animateFloat(
+    val moving by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(animation = tween(2200, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
         label = "scan-line-progress",
     )
+    val progress = if (reduceMotion) 0.5f else moving
     Canvas(modifier) {
         val side = min(size.width * 0.76f, size.height * 0.54f)
         val left = (size.width - side) / 2f

@@ -8,6 +8,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AppUpdatesTest {
+    /** 测试里禁用 update.json 回落，避免单元测试去请求真实网络。 */
+    private object EmptyManifest : AppUpdateSource {
+        override suspend fun latest(): AppRelease? = null
+        override suspend fun history(page: Int) = ReleasePage(emptyList(), false)
+        override suspend fun release(tag: String): AppRelease? = null
+    }
+
     @Test fun comparesNumericVersionsAndDoesNotAnnounceEqualOrOlderVersions() {
         assertTrue(isNewerRelease("0.10.0", "0.9.0"))
         assertTrue(isNewerRelease("1.0.0", "0.99.99"))
@@ -30,7 +37,7 @@ class AppUpdatesTest {
     @Test fun parsesReleaseMetadataAndPaginatesStableHistory() = runTest {
         val server = MockWebServer(); server.start()
         try {
-            val source = GitHubAppUpdates(endpoint = server.url("/releases/latest").toString())
+            val source = GitHubAppUpdates(endpoint = server.url("/releases/latest").toString(), manifest = EmptyManifest)
             val release = """{"draft":false,"prerelease":false,"tag_name":"v0.2.0","name":"Hydros 0.2.0","published_at":"2026-10-15T00:00:00Z","assets":[{"name":"app.apk","size":123,"browser_download_url":"https://github.com/SQMingZiA/Hydros-plus/releases/download/v0.2.0/app.apk","digest":"sha256:${"ab".repeat(32)}"},{"name":"bad.apk","browser_download_url":"https://example.com/bad.apk"}]}"""
             server.enqueue(MockResponse.Builder().body(release).build())
             val latest = source.latest()!!
@@ -51,7 +58,7 @@ class AppUpdatesTest {
         val server = MockWebServer()
         server.start()
         try {
-            val source = GitHubAppUpdates(endpoint = server.url("/releases/latest").toString())
+            val source = GitHubAppUpdates(endpoint = server.url("/releases/latest").toString(), manifest = EmptyManifest)
             server.enqueue(MockResponse.Builder().body("""{"draft":false,"prerelease":false,"tag_name":"v0.2.0","body":"更新说明"}""").build())
             val release = source.latest()!!
             assertEquals("0.2.0", release.version)
@@ -59,21 +66,22 @@ class AppUpdatesTest {
             assertEquals("https://github.com/SQMingZiA/Hydros-plus/releases/tag/v0.2.0", release.url)
             server.enqueue(MockResponse.Builder().code(404).build())
             assertNull(source.latest())
+            // API 限流/被拒时回落到索引；索引也是空的话就当作「没有新版本」，不再把异常抛到界面。
             server.enqueue(MockResponse.Builder().code(403).build())
-            assertTrue(runCatching { source.latest() }.isFailure)
+            assertNull(source.latest())
             server.enqueue(MockResponse.Builder().body("""{"draft":false,"prerelease":true,"tag_name":"v9.0.0-beta.1"}""").build())
             assertNull(source.latest())
             server.enqueue(MockResponse.Builder().body("""{"draft":true,"prerelease":false,"tag_name":"v9.0.0"}""").build())
             assertNull(source.latest())
             server.enqueue(MockResponse.Builder().body("""{"draft":false,"prerelease":false,"tag_name":"broken"}""").build())
-            assertTrue(runCatching { source.latest() }.isFailure)
+            assertNull(source.latest())
         } finally { server.close() }
     }
 
     @Test fun parsesGiteeReleaseAndFallsBackToHistoryList() = runTest {
         val server = MockWebServer(); server.start()
         try {
-            val gitee = GiteeAppUpdates(apiBase = server.url("/api").toString())
+            val gitee = GiteeAppUpdates(apiBase = server.url("/api").toString(), manifest = EmptyManifest)
             server.enqueue(MockResponse.Builder().body("""{"tag_name":"v1.1.8","name":"Hydros+ 1.1.8","body":"说明","assets":[{"name":"app.apk","size":10,"browser_download_url":"https://gitee.com/sqmingzia/Hydros-plus/releases/download/v1.1.8/app.apk"}]}""").build())
             val release = gitee.latest()!!
             assertEquals("1.1.8", release.version)

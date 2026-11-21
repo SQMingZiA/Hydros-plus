@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,6 +18,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -27,7 +30,11 @@ import org.cqutosp.hydros.ui.state.WaterDayUsage
 import org.cqutosp.hydros.ui.state.WaterTip
 import org.cqutosp.hydros.ui.state.WaterTipLevel
 import org.cqutosp.hydros.ui.state.WaterUsageReport
+import org.cqutosp.hydros.ui.share.WaterReportPoster
 import org.cqutosp.hydros.ui.state.money
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.abs
@@ -42,15 +49,20 @@ fun WaterReportScreen(
     limitCents: Long?,
     onWaterLimit: (Long?) -> Unit,
     onMonth: (YearMonth) -> Unit = {},
+    onOpenLimit: () -> Unit = {},
 ) {
-    var limitEditing by remember { mutableStateOf(false) }
     var showMonths by remember { mutableStateOf(false) }
     val selectedMonth = runCatching { YearMonth.parse(report.month) }.getOrNull()
     val currentMonth = YearMonth.now()
-    val onSetLimit: () -> Unit = { limitEditing = true }
+    val onSetLimit: () -> Unit = onOpenLimit
     val limit = limitCents?.takeIf { it > 0 }
     val reached = limit != null && report.limitReached
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbar = LocalHydrosSnackbar.current
+    // 报告本身是可滚动长列表，直接截屏拿不到屏幕外内容，这里按同一份数据重绘成一张长图。
+    var sharing by remember { mutableStateOf(false) }
 
     PageColumn {
         // 页头：月份切换 + 本月支出。整页只有这块用左侧主色竖条强调。
@@ -136,6 +148,41 @@ fun WaterReportScreen(
                     )
                 }
             }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextAction(
+                label = if (sharing) "正在生成长图…" else "保存长图并分享",
+                enabled = !sharing,
+                trailingIcon = R.drawable.ic_share,
+                onClick = {
+                    if (!sharing) {
+                    sharing = true
+                    scope.launch {
+                        val bitmap = withContext(Dispatchers.Default) {
+                            runCatching {
+                                WaterReportPoster.render(
+                                    report = report,
+                                    limitCents = limit,
+                                    primary = colors.primary.toArgb(),
+                                )
+                            }.getOrNull()
+                        }
+                        val uri = bitmap?.let { withContext(Dispatchers.IO) { WaterReportPoster.saveToGallery(context, it) } }
+                        sharing = false
+                        if (bitmap == null || uri == null) {
+                            snackbar.show("长图生成失败，请稍后重试")
+                        } else {
+                            snackbar.show("长图已保存到相册")
+                            WaterReportPoster.share(context, uri)
+                        }
+                    }
+                    }
+                },
+            )
         }
         if (!report.loaded) {
             // 账单未加载时只给一处占位，避免把 0 元当成真实数据展示。
@@ -294,14 +341,6 @@ fun WaterReportScreen(
             },
         )
     }
-    if (limitEditing) WaterLimitDialog(
-        initialCents = limitCents,
-        onDismiss = { limitEditing = false },
-        onConfirm = { cents ->
-            limitEditing = false
-            onWaterLimit(cents)
-        },
-    )
 }
 
 /** 7 列（周一起）的日历热力图，格子里显示日号，点按可查看当天支出。 */

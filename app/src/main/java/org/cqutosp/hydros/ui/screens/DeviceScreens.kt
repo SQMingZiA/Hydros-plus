@@ -261,13 +261,8 @@ fun SessionScreen(session: SessionUi?, onFinish: () -> Unit, onHome: () -> Unit,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.7f)
                     )
-                    // 实时用水量：网关会话里没有流量数据，用常见花洒 6 L/分钟 的流量按已用时长估算。
-                    val estimatedLiters = seconds * 6 / 60
-                    Text(
-                        text = estimatedLiters.toString() + " L",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
+                    // 网关会话没有流量数据，用水量不做估算，这里不显示。
+
                 }
                 Spacer(Modifier.height(12.dp))
                 WaterPanel {

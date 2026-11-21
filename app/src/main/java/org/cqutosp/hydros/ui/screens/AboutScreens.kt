@@ -1,5 +1,6 @@
 package org.cqutosp.hydros.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,9 +14,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -92,6 +95,38 @@ fun AboutScreen(
         { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
     } else null
     PageColumn {
+        // 页头：应用图标 + 名称，和「关于」页的定位对应。
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(R.mipmap.ic_launcher_default_foreground),
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                )
+            }
+            Column(Modifier.padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "Hydros+",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    "校园热水 · 扫码即用",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Section("版本信息") {
             MineRow("当前版本", supporting = BuildConfig.VERSION_NAME, icon = R.drawable.ic_info,
                 tone = IconTone.PRIMARY, onClick = onUpdates, trailing = versionBadge)

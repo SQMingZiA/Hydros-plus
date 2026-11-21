@@ -34,7 +34,7 @@ import javax.crypto.spec.SecretKeySpec
     val feedback: FeedbackSettings = FeedbackSettings(), val fontSizeScale: Float = 1f,
     val postSessionDestination: String = PostSessionDestination.BILL.name,
     val homeConnectCardVisible: Boolean = true, val waterLimitCents: Long? = null,
-    val waterLimitNotifiedMonth: String? = null, val avatarPath: String? = null, val demoMode: Boolean = false,
+    val waterLimitNotifiedMonth: String? = null, /** 达到限额后是否禁止开始新的用水。 */ val waterLimitBlock: Boolean = false, val avatarPath: String? = null, val demoMode: Boolean = false,
     val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null, val wallpaperDim: Float = 0.0f, val wallpaperBlur: Float = 0.0f,
     /** 底部导航是否启用液态玻璃（折射+模糊），关闭后改为普通磨砂。 */ val liquidGlass: Boolean = true,
@@ -68,6 +68,9 @@ interface HydrosStore {
     /** 已提醒过限额的月份，避免同一月份重复打扰。 */
     suspend fun waterLimitNotifiedMonth(): String? = null
     suspend fun waterLimitNotifiedMonth(value: String?) {}
+    /** 达到限额后是否禁止开始新的用水。 */
+    suspend fun waterLimitBlock(): Boolean = false
+    suspend fun waterLimitBlock(value: Boolean) {}
     /** 开发者演示数据模式：用本地模拟数据替代校园网关数据，便于无设备调试。 */
     suspend fun demoMode(): Boolean = false
     suspend fun demoMode(value: Boolean) {}
@@ -193,6 +196,8 @@ class PreferencesHydrosStore(context: Context) : HydrosStore {
     override suspend fun waterLimitCents(value: Long?) { edit { it.copy(waterLimitCents = value) } }
     override suspend fun waterLimitNotifiedMonth() = read().waterLimitNotifiedMonth
     override suspend fun waterLimitNotifiedMonth(value: String?) { edit { it.copy(waterLimitNotifiedMonth = value) } }
+    override suspend fun waterLimitBlock() = read().waterLimitBlock
+    override suspend fun waterLimitBlock(value: Boolean) { edit { it.copy(waterLimitBlock = value) } }
     override suspend fun demoMode() = read().demoMode
     override suspend fun demoMode(value: Boolean) { edit { it.copy(demoMode = value) } }
     override suspend fun messageReceipts() = read().let {

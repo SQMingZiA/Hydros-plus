@@ -40,14 +40,67 @@ private fun normalizePlain(text: String): String = text
     .replace(Regex("\n{3,}"), "\n\n")
     .trim()
 
+/** 公告正文里常见的日期行，例如 2026-09-26 / 2026-9-26 09:24:40。 */
+private val HEADER_DATE_LINE = Regex("^\\d{4}\\s*[-/.年]\\s*\\d{1,2}\\s*[-/.月]\\s*\\d{1,2}\\s*日?(\\s+\\d{1,2}:\\d{2}(:\\d{2})?)?$")
+
+/** 只有时间的一行，例如 09:24:40。 */
+private val HEADER_TIME_LINE = Regex("^\\d{1,2}:\\d{2}(:\\d{2})?$")
+
+private fun sameLine(a: String, b: String): Boolean =
+    a.replace(Regex("\\s+"), "") == b.replace(Regex("\\s+"), "")
+
+/**
+ * 计算正文开头需要丢掉的字符数：网关后台常把标题和日期也写进正文，
+ * 而详情页已经单独显示了标题与时间，重复出现两次会很奇怪。
+ */
+private fun isHeadingLike(line: String): Boolean =
+    line.length <= 40 && line.none { it == '。' || it == '！' || it == '？' || it == '；' || it == '.' || it == '!' || it == '?' || it == ';' }
+
+private fun leadingHeaderEnd(text: String, title: String?): Int {
+    if (title.isNullOrBlank()) return 0
+    data class Line(val end: Int, val text: String)
+    val lines = mutableListOf<Line>()
+    var cursor = 0
+    while (cursor < text.length && lines.size < 5) {
+        val lineEnd = text.indexOf('\n', cursor).let { if (it < 0) text.length else it }
+        val line = text.substring(cursor, lineEnd).trim()
+        if (line.isNotEmpty()) lines += Line(lineEnd, line)
+        cursor = lineEnd + 1
+    }
+    var dropped = 0
+    while (dropped < lines.size && dropped < 3) {
+        val line = lines[dropped].text
+        val isHeader = sameLine(line, title) || HEADER_DATE_LINE.matches(line) || HEADER_TIME_LINE.matches(line)
+        if (!isHeader) break
+        dropped++
+    }
+    if (dropped == 0) {
+        // 有的网关会在正文里再写一遍自己的小标题（和推送标题不同），紧跟一行日期，同样属于重复信息。
+        val first = lines.getOrNull(0)
+        val second = lines.getOrNull(1)
+        if (first != null && second != null && isHeadingLike(first.text) &&
+            (HEADER_DATE_LINE.matches(second.text) || HEADER_TIME_LINE.matches(second.text))
+        ) {
+            dropped = 2
+        }
+    }
+    if (dropped == 0) return 0
+    return (lines[dropped - 1].end + 1).coerceIn(0, text.length)
+}
+
 /**
  * Html.fromHtml 得到的 Spanned 转 AnnotatedString。
  *
  * 只保留加粗 / 斜体 / 下划线 / 删除线 / 等宽字体，颜色和字号交给主题：
  * 公告里写死的 #999999、12px 在深色模式或大字号下会很难读。
+ * [skipLeadingTitle] 用于详情页去掉正文里重复的标题与日期。
  */
-fun htmlToAnnotatedString(raw: String): AnnotatedString {
-    if (!looksLikeHtml(raw)) return AnnotatedString(normalizePlain(raw))
+fun htmlToAnnotatedString(raw: String, skipLeadingTitle: String? = null): AnnotatedString {
+    if (!looksLikeHtml(raw)) {
+        val plain = normalizePlain(raw)
+        val cut = leadingHeaderEnd(plain, skipLeadingTitle)
+        return AnnotatedString(plain.substring(cut).trimStart())
+    }
     val spanned: Spanned = runCatching { Html.fromHtml(raw, Html.FROM_HTML_MODE_COMPACT) }
         .getOrNull() ?: return AnnotatedString(normalizePlain(raw))
     val full = spanned.toString().replace('\u00A0', ' ').replace("\t", " ")
@@ -71,14 +124,18 @@ fun htmlToAnnotatedString(raw: String): AnnotatedString {
         out++
     }
     cursorStyle?.let { builder.addStyle(it, cursorStart, out) }
-    return builder.toAnnotatedString()
+    val annotated = builder.toAnnotatedString()
+    val cut = leadingHeaderEnd(annotated.text, skipLeadingTitle)
+    if (cut <= 0) return annotated
+    // subSequence 会保留区间内的样式，只是把重复的标题/日期切掉。
+    return AnnotatedString(annotated.text.substring(cut).trimStart())
 }
 
 /** 消息正文：自动识别纯文本 / HTML，统一用主题字号与正文色。 */
 @Composable
-fun MessageBody(text: String, modifier: Modifier = Modifier) {
+fun MessageBody(text: String, modifier: Modifier = Modifier, skipTitle: String? = null) {
     Text(
-        text = htmlToAnnotatedString(text),
+        text = htmlToAnnotatedString(text, skipTitle),
         modifier = modifier,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface,

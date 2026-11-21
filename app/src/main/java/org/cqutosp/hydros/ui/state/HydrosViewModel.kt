@@ -35,7 +35,8 @@ data class HydrosUiState(val initializing: Boolean = true, val signedIn: Boolean
     val feedback: FeedbackSettings = FeedbackSettings(),
     val fontSizeScale: Float = 1f,
     val homeConnectCardVisible: Boolean = true, val waterLimitCents: Long? = null,
-    val waterLimitNotifiedMonth: String? = null, val waterUsage: WaterUsageReport = WaterUsageReport(),
+    val waterLimitNotifiedMonth: String? = null, val waterLimitBlock: Boolean = false,
+    val waterUsage: WaterUsageReport = WaterUsageReport(),
     val avatarPath: String? = null,
     val month: String = YearMonth.now().toString(), val billType: BillType = BillType.CONSUMPTION,
     val loadingBills: Boolean = false,
@@ -140,6 +141,7 @@ class HydrosViewModel(
                 val homeConnectCardVisible = runCatching { graph.store.homeConnectCardVisible() }.getOrDefault(true)
                 val waterLimitCents = runCatching { graph.store.waterLimitCents() }.getOrNull()
                 val notified = runCatching { graph.store.waterLimitNotifiedMonth() }.getOrNull()
+                val waterLimitBlock = runCatching { graph.store.waterLimitBlock() }.getOrDefault(false)
                 val avatarPath = runCatching { graph.store.avatarPath() }.getOrNull()
                 val demo = runCatching { graph.store.demoMode() }.getOrDefault(false)
                 val liquidGlass = runCatching { graph.store.liquidGlass() }.getOrDefault(true)
@@ -156,7 +158,7 @@ class HydrosViewModel(
                 mutable.update { it.copy(theme=theme, onboardingCompleted=onboarding, feedback=feedback, updateSource=updateSource,
                     fontSizeScale=fontSizeScale, postSessionDestination=postSessionDestination,
                     homeConnectCardVisible=homeConnectCardVisible, waterLimitCents=waterLimitCents,
-                    waterLimitNotifiedMonth=notified, avatarPath=avatarPath, fontFamily=fontFamily,
+                    waterLimitNotifiedMonth=notified, waterLimitBlock=waterLimitBlock, avatarPath=avatarPath, fontFamily=fontFamily,
                     fontWeightStep=fontWeightStep,
                     gradientPreset=gradientPreset, gradientEnabled=gradientEnabled, accentColor=accentColor,
                     wallpaperPath=wallpaperPath, wallpaperDim=wallpaperDim, wallpaperBlur=wallpaperBlur,
@@ -191,7 +193,8 @@ class HydrosViewModel(
                         theme=current.theme, feedback=current.feedback, fontSizeScale=current.fontSizeScale,
                         postSessionDestination=current.postSessionDestination,
                         homeConnectCardVisible=current.homeConnectCardVisible, waterLimitCents=current.waterLimitCents,
-                        waterLimitNotifiedMonth=current.waterLimitNotifiedMonth, avatarPath=current.avatarPath,
+                        waterLimitNotifiedMonth=current.waterLimitNotifiedMonth, waterLimitBlock=current.waterLimitBlock,
+                        avatarPath=current.avatarPath,
                         liquidGlass=current.liquidGlass,
                         fontFamily=current.fontFamily, fontWeightStep=current.fontWeightStep,
                         gradientPreset=current.gradientPreset,
@@ -441,6 +444,14 @@ class HydrosViewModel(
                 waterUsage = current.waterUsage.copy(limitCents = cents?.takeIf { it > 0 })) }
             notifyWaterLimit()
         } }
+    }
+    /** 是否在达到限额后禁止开始新的用水。 */
+    fun waterLimitBlock(enabled: Boolean) {
+        graph.scope.launch {
+            runCatching { graph.store.waterLimitBlock(enabled) }
+            HydrosLog.log("water", if (enabled) "开启超额禁止使用" else "关闭超额禁止使用")
+            mutable.update { it.copy(waterLimitBlock = enabled) }
+        }
     }
     /** 当月支出达到限额时提醒一次，避免每次刷新都打扰。 */
     private fun notifyWaterLimit() {
@@ -778,6 +789,17 @@ class HydrosViewModel(
     }
     fun start(device: DeviceUi) {
         if (state.value.working || state.value.session != null) return
+        // 达到本月限额且开启了“禁止使用”时，直接拦下，不向网关发起开启请求。
+        val limit = state.value.waterLimitCents?.takeIf { it > 0 }
+        val usage = state.value.waterUsage
+        if (limit != null && state.value.waterLimitBlock && usage.loaded && usage.totalCents >= limit) {
+            HydrosLog.log("session", "用水限额已触发，拦截开始用水")
+            mutable.update {
+                it.copy(message = "本月用水支出已达限额 ¥" + money(limit) + "，已禁止开始新的用水；可在「用水限额」里调整限额或关闭限制",
+                    messageSeverity = FeedbackSeverity.WARNING, messageSource = "water-limit", messageAction = null)
+            }
+            return
+        }
         if (state.value.demoMode) {
             demoStart(device)
             return

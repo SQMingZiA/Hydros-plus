@@ -431,13 +431,13 @@ fun MineScreen(
     onRefresh: () -> Unit = {},
     onWaterReport: () -> Unit = {},
     onWaterLimit: (Long?) -> Unit = {},
+    onWaterLimitPage: () -> Unit = {},
     onUseCode: () -> Unit = {},
     onDorm: () -> Unit = {},
     onRecharge: () -> Unit = {},
     onAvatarPath: (String?) -> Unit = {},
     onMessages: () -> Unit = {},
 ) {
-    var limitEditing by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked ->
@@ -510,7 +510,7 @@ fun MineScreen(
                 onClick = onWaterReport)
             SubtleDivider()
             MineRow("用水限额", icon = R.drawable.ic_notifications, tone = IconTone.SECONDARY,
-                onClick = { limitEditing = true })
+                onClick = onWaterLimitPage)
             SubtleDivider()
             MineRow("使用码", icon = R.drawable.ic_code, tone = IconTone.PRIMARY,
                 onClick = onUseCode)
@@ -533,14 +533,6 @@ fun MineScreen(
                 onClick = onAbout)
         }
     }
-    if (limitEditing) WaterLimitDialog(
-        initialCents = state.waterLimitCents,
-        onDismiss = { limitEditing = false },
-        onConfirm = { cents ->
-            limitEditing = false
-            onWaterLimit(cents)
-        },
-    )
 }
 
 /** 每月用水限额编辑对话框：留空即取消限额，输入按“元”换算成分。 */

@@ -16,6 +16,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.compositeOver
@@ -37,6 +40,25 @@ internal fun sectionRowSurfaceColor(active: Boolean, pressed: Boolean, hovered: 
         pressed -> colors.onSurface.copy(alpha = 0.10f)
         hovered -> colors.onSurface.copy(alpha = 0.05f)
         else -> Color.Transparent
+    }
+}
+
+/**
+ * 行内的按下/悬停填充：左右各外扩 [bleed]（默认 20dp，对齐 PageColumn 的横向内边距），
+ * 这样设置类长条行的底色是通栏的，而不是只覆盖文字宽度。
+ */
+@Composable
+internal fun Modifier.sectionRowFill(
+    active: Boolean,
+    pressed: Boolean,
+    hovered: Boolean,
+    bleed: androidx.compose.ui.unit.Dp = 20.dp,
+): Modifier {
+    val fill = sectionRowSurfaceColor(active, pressed, hovered)
+    if (fill == Color.Transparent) return this
+    return drawBehind {
+        val extra = bleed.toPx()
+        drawRect(color = fill, topLeft = Offset(-extra, 0f), size = Size(size.width + extra * 2, size.height))
     }
 }
 
@@ -188,8 +210,8 @@ fun MineRow(
     } else Modifier
     Surface(
         shape = RectangleShape,
-        color = sectionRowSurfaceColor(onClick != null, pressed, hovered),
-        modifier = modifier.fillMaxWidth().then(rowModifier)
+        color = Color.Transparent,
+        modifier = modifier.fillMaxWidth().sectionRowFill(onClick != null, pressed, hovered).then(rowModifier)
     ) {
         content()
     }
@@ -247,7 +269,7 @@ fun RadioRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(sectionRowSurfaceColor(enabled, pressed, hovered))
+            .sectionRowFill(enabled, pressed, hovered)
             .selectable(
                 selected = selected,
                 interactionSource = interaction,
@@ -351,7 +373,7 @@ fun SwitchRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(sectionRowSurfaceColor(enabled, pressed, hovered))
+            .sectionRowFill(enabled, pressed, hovered)
             .then(if (switchTag != null) Modifier.testTag(switchTag) else Modifier)
             .toggleable(
                 value = checked,

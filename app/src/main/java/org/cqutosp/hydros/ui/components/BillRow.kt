@@ -11,6 +11,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
@@ -35,14 +38,21 @@ fun BillRow(bill: BillUi, onClick: (() -> Unit)? = null) {
         Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
     } else Modifier
 
+    val fill = when {
+        pressed -> colors.surfaceVariant.copy(alpha = 0.65f)
+        hovered -> colors.surfaceVariant.copy(alpha = 0.35f)
+        else -> Color.Transparent
+    }
+    val bleed = 16.dp
     Surface(
         shape = RectangleShape,
-        color = when {
-            pressed -> colors.surfaceVariant.copy(alpha = 0.65f)
-            hovered -> colors.surfaceVariant.copy(alpha = 0.35f)
-            else -> Color.Transparent
-        },
-        modifier = Modifier.fillMaxWidth().then(rowModifier)
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
+            .then(if (fill == Color.Transparent) Modifier else Modifier.drawBehind {
+                val extra = bleed.toPx()
+                drawRect(color = fill, topLeft = Offset(-extra, 0f), size = Size(size.width + extra * 2, size.height))
+            })
+            .then(rowModifier)
     ) {
         Row(
             Modifier

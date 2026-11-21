@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -135,6 +136,7 @@ import org.cqutosp.hydros.ui.components.LocalHydrosWallpaper
 import org.cqutosp.hydros.ui.components.WallpaperConfig
 import androidx.activity.result.PickVisualMediaRequest
 import org.cqutosp.hydros.ui.theme.IosTokens
+import org.cqutosp.hydros.ui.theme.LocalFeedbackSettings
 
 private data class AppDestination(val route: String, val label: String, val icon: Int, val iconOutline: Int)
 private val destinations = listOf(
@@ -512,6 +514,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                         onDisplay = { openPage("display") },
                                         onWaterReport = { openPage("water/report") },
                                         onWaterLimit = model::waterLimit,
+                                        onWaterLimitPage = { openPage("water/limit") },
                                         onUseCode = { openPage("thirdparty/usecode") },
                                         onDorm = { openPage("thirdparty/dorm") },
                                         onAvatarPath = model::avatarPath,
@@ -710,6 +713,21 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                     limitCents = state.waterLimitCents,
                                     onWaterLimit = model::waterLimit,
                                     onMonth = { selected -> model.loadMonth(selected.toString()) },
+                                    onOpenLimit = { openPage("water/limit") },
+                                )
+                            }
+                        }
+                        composable("water/limit") {
+                            HydrosPage("用水限额", onBack = { back() }) {
+                                WaterLimitScreen(
+                                    limitCents = state.waterLimitCents,
+                                    blockEnabled = state.waterLimitBlock,
+                                    usage = state.waterUsage,
+                                    onSaveLimit = { cents ->
+                                        model.waterLimit(cents)
+                                        snackbar.show(if (cents == null) "已取消本月用水限额" else "已保存用水限额 ¥" + org.cqutosp.hydros.ui.state.money(cents))
+                                    },
+                                    onBlockLimit = model::waterLimitBlock,
                                 )
                             }
                         }
@@ -1012,14 +1030,21 @@ internal fun HomeWalletTabs(progress: Float, onSelect: (Int) -> Unit) {
         listOf("首页" to 0, "钱包" to 1).forEach { (label, index) ->
             val emphasis = (1f - kotlin.math.abs(position - index)).coerceIn(0f, 1f)
             val selected = (position >= 0.5f) == (index == 1)
+            val tabInteraction = remember(index) { MutableInteractionSource() }
             Box(
                 Modifier.width(tabWidth).fillMaxHeight()
-                    .selectable(selected = selected, role = Role.Tab, onClick = {
-                        if (!selected) {
-                            haptics.medium()
-                            onSelect(index)
+                    .selectable(
+                        selected = selected,
+                        interactionSource = tabInteraction,
+                        indication = null,
+                        role = Role.Tab,
+                        onClick = {
+                            if (!selected) {
+                                haptics.medium()
+                                onSelect(index)
+                            }
                         }
-                    }),
+                    ),
                 contentAlignment = Alignment.CenterStart
             ) {
                 Text(
@@ -1066,6 +1091,7 @@ internal fun HydrosBottomBar(
     val colors = MaterialTheme.colorScheme
     val backdrop = LocalLiquidBackdrop.current
     val liquid = LocalLiquidGlassEnabled.current
+    val reduceMotion = LocalFeedbackSettings.current.reduceMotionEnabled
     val barHeight = 52.dp
     val glassShape = RoundedCornerShape(999.dp)
     var capsuleOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -1079,11 +1105,14 @@ internal fun HydrosBottomBar(
     // 拖动时的连续位置：手势回调不是挂起函数，这里同步记录，画布直接读它。
     var dragTarget by remember { mutableStateOf(selectedIndex.toFloat()) }
     LaunchedEffect(route) {
-        if (!dragging) droplet.animateTo(selectedIndex.toFloat(), spring(dampingRatio = 0.62f, stiffness = 380f))
+        if (!dragging) droplet.animateTo(
+            selectedIndex.toFloat(),
+            if (reduceMotion) snap() else spring(dampingRatio = 0.62f, stiffness = 380f),
+        )
     }
     val lift by animateFloatAsState(
-        targetValue = if (dragging) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 520f),
+        targetValue = if (dragging && !reduceMotion) 1f else 0f,
+        animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.6f, stiffness = 520f),
         label = "glass-lift"
     )
     // 玻璃的透光率随拖动抬升变化：抬起时更透、投影更深，落下时收紧。
@@ -1138,7 +1167,10 @@ internal fun HydrosBottomBar(
                                 val target = dragTarget.roundToInt().coerceIn(0, destinations.lastIndex)
                                 scope.launch {
                                     droplet.snapTo(dragTarget)
-                                    droplet.animateTo(target.toFloat(), spring(dampingRatio = 0.55f, stiffness = 420f))
+                                    droplet.animateTo(
+                                        target.toFloat(),
+                                        if (reduceMotion) snap() else spring(dampingRatio = 0.55f, stiffness = 420f),
+                                    )
                                     if (destinations[target].route != route) {
                                         haptics.medium()
                                         onNavigate(destinations[target].route)
@@ -1147,7 +1179,12 @@ internal fun HydrosBottomBar(
                             },
                             onDragCancel = {
                                 dragging = false
-                                scope.launch { droplet.animateTo(selectedIndex.toFloat(), spring(dampingRatio = 0.6f, stiffness = 400f)) }
+                                scope.launch {
+                                    droplet.animateTo(
+                                        selectedIndex.toFloat(),
+                                        if (reduceMotion) snap() else spring(dampingRatio = 0.6f, stiffness = 400f),
+                                    )
+                                }
                             }
                         )
                     }
@@ -1201,7 +1238,7 @@ internal fun HydrosBottomBar(
                         val pressed by pressSource.collectIsPressedAsState()
                         val pressGlow by animateFloatAsState(
                             targetValue = if (pressed) 1f else 0f,
-                            animationSpec = spring(dampingRatio = 0.7f, stiffness = 700f),
+                            animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.7f, stiffness = 700f),
                             label = "tab-press-" + destination.route
                         )
                         // 药丸掠过时，图标被“挤”成胶囊形状（横向压扁、纵向拉长），并轻微上浮。
@@ -1279,13 +1316,13 @@ internal fun HydrosBottomBar(
             val fabSource = remember { MutableInteractionSource() }
             val fabPressed by fabSource.collectIsPressedAsState()
             val fabScale by animateFloatAsState(
-                targetValue = if (fabPressed) 0.93f else 1f,
-                animationSpec = spring(dampingRatio = 0.55f, stiffness = 900f),
+                targetValue = if (fabPressed && !reduceMotion) 0.93f else 1f,
+                animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.55f, stiffness = 900f),
                 label = "fab-press"
             )
             val fabGlow by animateFloatAsState(
-                targetValue = if (fabPressed) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.7f, stiffness = 800f),
+                targetValue = if (fabPressed && !reduceMotion) 1f else 0f,
+                animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.7f, stiffness = 800f),
                 label = "fab-glow"
             )
             Box(

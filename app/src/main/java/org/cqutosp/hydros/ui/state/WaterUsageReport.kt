@@ -146,14 +146,10 @@ data class WaterUsageReport(
                 (limitScore + nightScore + stableScore).roundToInt().coerceIn(0, 100)
             }
 
-            // 用水量：网关下发的实测值优先，缺失时用金额按单价折算，并记录估算条数。
-            val waterRecords = usage.mapNotNull { bill ->
-                val actual = bill.waterMilliLiters?.takeIf { it > 0 }
-                val value = actual ?: org.cqutosp.hydros.data.billing.estimateWaterMilliLiters(bill.amountMilli)
-                value?.let { it to (actual == null) }
-            }
-            val totalWater = waterRecords.sumOf { it.first }
-            val estimatedWater = waterRecords.count { it.second }
+            // 用水量：只累计网关明确下发的实测值，缺失的账单不估算也不计入。
+            val waterRecords = usage.mapNotNull { bill -> bill.waterMilliLiters?.takeIf { it > 0 } }
+            val totalWater = waterRecords.sum()
+            val estimatedWater = 0
 
             val average = if (count > 0) total / count else 0L
             val peakAmount = usage.maxOfOrNull { it.amountCents ?: 0L } ?: 0L

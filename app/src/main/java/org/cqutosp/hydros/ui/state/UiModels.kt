@@ -47,15 +47,14 @@ enum class BillType(val requestType: String, val label: String) {
 data class BillUi(val id: String, val title: String, val location: String, val category: DeviceCategory?, val amountMilli: Long?,
     val time: LocalDateTime, val consumeDate: String, val orderNo: String? = null, val durationText: String? = null,
     val recharge: Boolean = false, val detailAvailable: Boolean = true,
-    /** 网关直接下发的用水量（毫升）；缺失时由金额估算。 */
-    val waterMilliLiters: Long? = null, /** true 表示 waterMilliLiters 是按金额折算出来的。 */
+    /** 网关直接下发的用水量（毫升）。没有明确下发时保持 null，界面不显示、也不做估算。 */
+    val waterMilliLiters: Long? = null, /** 兼容旧字段：现在不再按金额折算，恒为 false。 */
     val waterEstimated: Boolean = false) {
     val amountCents get() = amountMilli?.let(::displayCents)
     val month: YearMonth get() = YearMonth.from(time)
-    /** 用水量（毫升）：真实值优先，否则按金额估算；充值记录没有用水量。 */
-    val effectiveWaterMilliLiters: Long? get() = if (recharge) null else
-        org.cqutosp.hydros.data.billing.waterVolumeOf(waterMilliLiters, amountMilli)?.milliLiters
-    val waterIsEstimated: Boolean get() = waterMilliLiters == null || waterMilliLiters <= 0
+    /** 只认网关明确下发的用水量；缺失时返回 null，界面直接不显示这一行。 */
+    val effectiveWaterMilliLiters: Long? get() = if (recharge) null else waterMilliLiters?.takeIf { it > 0 }
+    val waterIsEstimated: Boolean get() = false
     val waterText: String? get() = org.cqutosp.hydros.data.billing.formatWaterVolume(effectiveWaterMilliLiters)
 }
 /** Per-bill detail status, with any failure already mapped to user-facing text. */
