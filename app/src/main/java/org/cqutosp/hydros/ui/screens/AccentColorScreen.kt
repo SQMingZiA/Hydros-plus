@@ -52,7 +52,7 @@ fun AccentColorScreen(accent: Long?, onAccent: (Long?) -> Unit) {
     var hexInput by remember(accent) { mutableStateOf(accent?.let(::accentHex) ?: "") }
     var error by remember(accent) { mutableStateOf<String?>(null) }
     PageColumn {
-        Section("强调色") {
+        Section("主题色") {
             Column(Modifier.selectableGroup()) {
                 DefaultAccentRow(selected = accent == null, onClick = { onAccent(null) })
                 Column(

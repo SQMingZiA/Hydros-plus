@@ -49,18 +49,18 @@ fun AppearanceScreen(
         Section("个性化") {
             MineRow(
                 title = "主题色",
-                supporting = gradientLabel,
+                supporting = accentLabel,
                 icon = R.drawable.ic_palette,
                 tone = IconTone.PRIMARY,
-                onClick = onOpenThemeColor
+                onClick = onOpenAccent
             )
             SubtleDivider()
             MineRow(
-                title = "强调色",
-                supporting = accentLabel,
+                title = "渐变背景",
+                supporting = gradientLabel,
                 icon = R.drawable.ic_water,
                 tone = IconTone.SECONDARY,
-                onClick = onOpenAccent
+                onClick = onOpenThemeColor
             )
             SubtleDivider()
             MineRow(

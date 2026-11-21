@@ -15,8 +15,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -323,6 +326,7 @@ fun SubtleDivider(modifier: Modifier = Modifier, horizontalPadding: Dp = 16.dp) 
 
 @Composable
 fun PageColumn(content: @Composable ColumnScope.() -> Unit) {
+    val glassInset = LocalLiquidGlassInset.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(
             Modifier
@@ -332,7 +336,7 @@ fun PageColumn(content: @Composable ColumnScope.() -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .imePadding()
                 .padding(horizontal = 20.dp)
-                .padding(top = 8.dp, bottom = 32.dp),
+                .padding(top = 8.dp, bottom = glassInset + 32.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             content = content
         )
@@ -498,16 +502,10 @@ fun HydrosPage(
     content: @Composable () -> Unit
 ) {
     val hasWallpaper = wallpaper?.path?.isNotBlank() == true
+    val backdrop = remember { LiquidBackdropState() }
+    val backdropLayer = rememberGraphicsLayer()
+    SideEffect { backdrop.layer = backdropLayer }
     Box(Modifier.fillMaxSize()) {
-        when {
-            background != null -> background()
-            hasWallpaper -> WallpaperBackdrop(
-                path = wallpaper?.path,
-                dim = wallpaper?.dim ?: 0f,
-                blur = wallpaper?.blur ?: 0f,
-            )
-            else -> LiquidBackground()
-        }
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -553,9 +551,37 @@ fun HydrosPage(
                     }
                 }
             },
-            bottomBar = bottomBar
+            bottomBar = {}
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { content() }
+            // 内容铺到屏幕底部（导航玻璃悬浮其上），方便玻璃实时采样到内容。
+            Box(
+                Modifier.fillMaxSize()
+                    .padding(top = padding.calculateTopPadding())
+                    .consumeWindowInsets(padding)
+            ) {
+                CompositionLocalProvider(
+                    LocalLiquidBackdrop provides backdrop,
+                    LocalLiquidGlassInset provides 84.dp
+                ) {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .liquidBackdropOrigin(backdrop)
+                            .liquidBackdropSource(backdrop)
+                    ) {
+                        when {
+                            background != null -> background()
+                            hasWallpaper -> WallpaperBackdrop(
+                                path = wallpaper?.path,
+                                dim = wallpaper?.dim ?: 0f,
+                                blur = wallpaper?.blur ?: 0f,
+                            )
+                            else -> LiquidBackground()
+                        }
+                        content()
+                    }
+                    Box(Modifier.align(Alignment.BottomCenter)) { bottomBar() }
+                }
+            }
         }
     }
 }

@@ -54,12 +54,15 @@ import androidx.compose.ui.semantics.Role
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -116,6 +119,12 @@ import org.cqutosp.hydros.ui.theme.FontChoice
 import org.cqutosp.hydros.ui.theme.fontSet
 import org.cqutosp.hydros.ui.theme.GradientPreset
 import androidx.activity.ComponentActivity
+import org.cqutosp.hydros.ui.components.LocalLiquidBackdrop
+import org.cqutosp.hydros.ui.components.capsulePath
+import org.cqutosp.hydros.ui.components.circlePath
+import org.cqutosp.hydros.ui.components.drawLiquidBackdrop
+import org.cqutosp.hydros.ui.components.drawLiquidGlassBallTint
+import org.cqutosp.hydros.ui.components.drawLiquidGlassTint
 import org.cqutosp.hydros.ui.components.LocalHydrosWallpaper
 import org.cqutosp.hydros.ui.components.WallpaperConfig
 import org.cqutosp.hydros.ui.state.AppIconController
@@ -574,8 +583,8 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                         else -> "默认图标"
                                     },
                                     onOpenFont = { openPage("appearance/font") },
-                                    onOpenThemeColor = { openPage("appearance/theme-color") },
-                                    onOpenAccent = { openPage("appearance/accent") },
+                                    onOpenThemeColor = { openPage("appearance/gradient") },
+                                    onOpenAccent = { openPage("appearance/theme-color") },
                                     onOpenWallpaper = { openPage("appearance/wallpaper") },
                                     onOpenIcon = { openPage("appearance/icon") },
                                 )
@@ -587,13 +596,14 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                             }
                         }
                         composable("appearance/theme-color") {
+                            // 主题色 = 全站强调色（按钮、选中态、图标底色、扫码球渐变都跟着走）。
                             HydrosPage("主题色", onBack = { back() }) {
-                                ThemeColorScreen(state.gradientPreset, state.gradientEnabled, model::gradientPreset, model::gradientEnabled)
+                                AccentColorScreen(state.accentColor, onAccent = model::accentColor)
                             }
                         }
-                        composable("appearance/accent") {
-                            HydrosPage("强调色", onBack = { back() }) {
-                                AccentColorScreen(state.accentColor, onAccent = model::accentColor)
+                        composable("appearance/gradient") {
+                            HydrosPage("渐变背景", onBack = { back() }) {
+                                ThemeColorScreen(state.gradientPreset, state.gradientEnabled, model::gradientPreset, model::gradientEnabled)
                             }
                         }
                         composable("appearance/wallpaper") {
@@ -1041,36 +1051,24 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
     val haptics = rememberHydrosHaptics()
     val density = LocalDensity.current
     val dark = isDarkScheme()
-    val gradient = LocalHydrosGradient.current
-    val gradientEnabled = LocalHydrosGradientEnabled.current
+    val colors = MaterialTheme.colorScheme
+    val backdrop = LocalLiquidBackdrop.current
     val barHeight = 52.dp
     val glassShape = RoundedCornerShape(999.dp)
-    val windowInfo = LocalWindowInfo.current
-    var barPosition by remember { mutableStateOf(Offset.Zero) }
-    val screenWidth = windowInfo.containerSize.width.takeIf { it > 0 }?.toFloat()
-        ?: with(density) { 400.dp.toPx() }
-    val screenHeight = windowInfo.containerSize.height.takeIf { it > 0 }?.toFloat()
-        ?: with(density) { 800.dp.toPx() }
-    val parallax = Offset(
-        x = -(barPosition.x / screenWidth) * with(density) { 22.dp.toPx() },
-        y = -(barPosition.y / screenHeight) * with(density) { 14.dp.toPx() }
-    )
-    // 采样层只模糊一次：只随窗口位置变化，不做逐帧全屏截图。
-    val blurEdge = if (Build.VERSION.SDK_INT >= 33) {
-        BlurredEdgeTreatment.Unbounded
-    } else {
-        // API 31/32 上 Unbounded 在部分设备会出现黑边，退回按边界裁剪。
-        BlurredEdgeTreatment.Rectangle
-    }
-    val tintAlpha = if (dark) 0.08f else 0.13f
-    val rimColor = if (dark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.66f)
-    val topHighlight = if (dark) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.72f)
-    val bottomShadow = if (dark) Color.Black.copy(alpha = 0.34f) else Color.Black.copy(alpha = 0.06f)
-    val sampleAlpha = if (dark) 0.58f else 0.52f
+    var capsuleOrigin by remember { mutableStateOf(Offset.Zero) }
+    var fabOrigin by remember { mutableStateOf(Offset.Zero) }
+    // 玻璃的“奶感”：真实设备上再叠 blur，模拟器没有 RenderEffect 时也不会让底下文字清晰穿透。
+    val tintAlpha = if (dark) 0.34f else 0.70f
+    val tintTopAlpha = if (dark) 0.52f else 0.90f
+    val edgeLight = if (dark) Color.White.copy(alpha = 0.34f) else Color.White.copy(alpha = 0.86f)
+    val edgeShade = if (dark) Color.Black.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.10f)
+    // 扫码球也跟着主题色走：品牌色提亮做高光，偏紫做暗部，仍是 iOS 的渐变球。
+    val brand = colors.primary
+    val fabStart = lerp(brand, Color.White, if (dark) 0.16f else 0.34f)
+    val fabEnd = lerp(brand, Color(0xFF6C4CF6), 0.45f)
     Box(
         Modifier.fillMaxWidth()
             .onSizeChanged { onHeight(it.height + with(density) { 12.dp.roundToPx() }) }
-            .onGloballyPositioned { barPosition = it.positionInWindow() }
             .testTag("main-bottom-bar")
     ) {
         Row(
@@ -1083,36 +1081,29 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                 Modifier.weight(1f).height(barHeight)
                     .shadow(16.dp, glassShape)
                     .clip(glassShape)
-                    .background(if (dark) Color(0x14FFFFFF) else Color(0x33FFFFFF))
+                    .onGloballyPositioned { capsuleOrigin = it.positionInWindow() }
             ) {
-                // 1) 背景采样：复用页面渐变光斑，按导航栏在屏幕中的位置做视差偏移后模糊成液体。
-                Canvas(
+                // 真实液态玻璃：先把页面内容录进采样层，再对“只画采样层”的盒子做 blur，
+                // 最后叠一层不模糊的染色/高光，得到 iOS 那种被磨砂过的透光玻璃。
+                Box(
                     Modifier.matchParentSize()
-                        .graphicsLayer { alpha = sampleAlpha }
-                        .blur(20.dp, blurEdge)
+                        .blur(18.dp, if (Build.VERSION.SDK_INT >= 33) BlurredEdgeTreatment.Unbounded else BlurredEdgeTreatment.Rectangle)
                 ) {
-                    drawGlassSample(gradient, gradientEnabled, dark, parallax)
+                    Canvas(Modifier.matchParentSize()) {
+                        drawLiquidBackdrop(backdrop, capsuleOrigin, capsulePath(size.width, size.height))
+                    }
                 }
-                // 2) 玻璃 tint
-                Box(Modifier.matchParentSize().background(Color.White.copy(alpha = tintAlpha)))
-                // 3) 上缘高光
-                Box(
-                    Modifier.align(Alignment.TopCenter).fillMaxWidth(0.9f).height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color.Transparent, topHighlight, Color.Transparent)
-                            )
-                        )
-                )
-                // 4) 下缘内阴影：玻璃厚度
-                Box(
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.94f).height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color.Transparent, bottomShadow, Color.Transparent)
-                            )
-                        )
-                )
+                Canvas(Modifier.matchParentSize()) {
+                    val path = capsulePath(size.width, size.height)
+                    drawLiquidGlassTint(
+                        shape = path,
+                        tint = Color.White.copy(alpha = tintAlpha),
+                        tintTop = Color.White.copy(alpha = tintTopAlpha),
+                        edgeLight = edgeLight,
+                        edgeShade = edgeShade,
+                        brandGlow = brand.copy(alpha = if (dark) 0.10f else 0.07f)
+                    )
+                }
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                     destinations.forEach { destination ->
                         val selected = route == destination.route
@@ -1126,7 +1117,7 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                                 Modifier.fillMaxWidth(0.82f).height(40.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                // 只有选中的 tab 才有玻璃内胆：内胆单独一层，随选中进度淡入。
+                                // 选中内胆：iOS 的“玻璃里再压一块更亮的玻璃”，只随选中进度淡入。
                                 Box(
                                     Modifier
                                         .matchParentSize()
@@ -1139,15 +1130,14 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                                         .background(
                                             Brush.verticalGradient(
                                                 listOf(
-                                                    Color.White.copy(alpha = if (dark) 0.10f else 0.30f),
-                                                    MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.26f else 0.16f),
-                                                    MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.18f else 0.10f)
+                                                    Color.White.copy(alpha = if (dark) 0.16f else 0.62f),
+                                                    Color.White.copy(alpha = if (dark) 0.10f else 0.42f)
                                                 )
                                             )
                                         )
                                         .border(
-                                            0.5.dp,
-                                            Color.White.copy(alpha = if (dark) 0.22f else 0.55f),
+                                            0.8.dp,
+                                            Color.White.copy(alpha = if (dark) 0.22f else 0.72f),
                                             RoundedCornerShape(999.dp)
                                         )
                                 )
@@ -1155,13 +1145,13 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                                     Glyph(
                                         if (selected) destination.icon else destination.iconOutline,
                                         modifier = Modifier.size((21 + 2 * scale).dp),
-                                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = if (selected) colors.primary else colors.onSurfaceVariant,
                                         description = destination.label
                                     )
                                     Text(
                                         destination.label,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = if (selected) colors.primary else colors.onSurfaceVariant,
                                         maxLines = 1
                                     )
                                 }
@@ -1176,8 +1166,6 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                         }
                     }
                 }
-                // 5) 玻璃描边最后绘制，压住采样层与染色层。
-                Box(Modifier.matchParentSize().border(0.8.dp, rimColor, glassShape))
             }
             Box(
                 Modifier
@@ -1185,60 +1173,26 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                     .hydrosPressable(pressedScale = 0.94f) { haptics.light(); onScan() }
                     .shadow(14.dp, CircleShape)
                     .clip(CircleShape)
-                    .drawBehind {
-                        val ballRadius = size.minDimension / 2f
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    lerp(IosTokens.FabStart, Color.White, 0.62f),
-                                    IosTokens.FabStart,
-                                    lerp(IosTokens.FabEnd, Color.Black, 0.18f)
-                                ),
-                                center = Offset(size.width * 0.36f, size.height * 0.30f),
-                                radius = ballRadius * 1.18f
-                            ),
-                            radius = ballRadius,
-                            center = center
-                        )
-                    }
-                    .border(1.dp, Color.White.copy(alpha = 0.40f), CircleShape)
+                    .onGloballyPositioned { fabOrigin = it.positionInWindow() }
                     .testTag("scan-action"),
                 contentAlignment = Alignment.Center
             ) {
+                Box(
+                    Modifier.matchParentSize()
+                        .blur(14.dp, if (Build.VERSION.SDK_INT >= 33) BlurredEdgeTreatment.Unbounded else BlurredEdgeTreatment.Rectangle)
+                ) {
+                    Canvas(Modifier.matchParentSize()) {
+                        drawLiquidBackdrop(backdrop, fabOrigin, circlePath(center, size.minDimension / 2f))
+                    }
+                }
                 Canvas(Modifier.matchParentSize()) {
-                    val inset = 1.6.dp.toPx()
-                    val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
-                    // 左上 120° 环境反射高光
-                    drawArc(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.62f),
-                                Color.White.copy(alpha = 0.10f),
-                                Color.Transparent
-                            ),
-                            start = Offset(inset, inset),
-                            end = Offset(size.width * 0.72f, size.height * 0.72f)
-                        ),
-                        startAngle = -168f,
-                        sweepAngle = 118f,
-                        useCenter = false,
-                        topLeft = Offset(inset, inset),
-                        size = arcSize,
-                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-                    )
-                    // 右下淡内阴影
-                    drawArc(
-                        brush = Brush.linearGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.20f)),
-                            start = Offset(size.width * 0.55f, size.height * 0.55f),
-                            end = Offset(size.width, size.height)
-                        ),
-                        startAngle = 18f,
-                        sweepAngle = 96f,
-                        useCenter = false,
-                        topLeft = Offset(inset, inset),
-                        size = arcSize,
-                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                    drawLiquidGlassBallTint(
+                        shape = circlePath(center, size.minDimension / 2f),
+                        center = center,
+                        radius = size.minDimension / 2f,
+                        brandStart = fabStart,
+                        brandEnd = fabEnd,
+                        dark = dark
                     )
                 }
                 Glyph(R.drawable.ic_scan, modifier = Modifier.size(24.dp), tint = Color.White, description = "扫码")

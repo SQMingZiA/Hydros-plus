@@ -168,23 +168,14 @@ fun HomeScreen(
                     onClick = onWallet
                 )
             }
-            SectionHeader("我的设备")
+            // 没有收藏时整块（含分组标题）都不渲染：用户明确不要空态卡片。
             if (favorites.isNotEmpty()) {
+                SectionHeader("我的设备")
                 GlassPanel(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
                     favorites.forEachIndexed { index, device ->
                         if (index > 0) SubtleDivider(horizontalPadding = 0.dp)
                         FavoriteDeviceRow(device, state.deviceRemarks) { onDevice(device.id) }
                     }
-                }
-            } else {
-                GlassPanel(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
-                    MineRow(
-                        "还没有收藏设备",
-                        supporting = "在设备详情里点「收藏」，就会固定出现在这里",
-                        icon = R.drawable.ic_star,
-                        tone = IconTone.NEUTRAL,
-                        onClick = onScan,
-                    )
                 }
             }
             // 显示设置里可以关掉“连接身边的设备”入口，关闭后首页不再渲染它。

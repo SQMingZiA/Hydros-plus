@@ -48,7 +48,7 @@ fun IconTile(
     val dark = isDarkScheme()
     val colors = MaterialTheme.colorScheme
     val (bgColor, fgColor) = when (tone) {
-        IconTone.PRIMARY -> (if (dark) colors.primary.copy(alpha = 0.22f) else IosTokens.Accent.copy(alpha = 0.14f)) to colors.primary
+        IconTone.PRIMARY -> (if (dark) colors.primary.copy(alpha = 0.22f) else colors.primary.copy(alpha = 0.14f)) to colors.primary
         IconTone.SECONDARY -> (if (dark) colors.secondary.copy(alpha = 0.22f) else IosTokens.Violet.copy(alpha = 0.14f)) to colors.secondary
         IconTone.TERTIARY -> (if (dark) colors.tertiary.copy(alpha = 0.22f) else IosTokens.Success.copy(alpha = 0.16f)) to colors.tertiary
         IconTone.NEUTRAL -> (if (dark) colors.surfaceVariant else Color(0xFFEFF2F8)) to colors.onSurfaceVariant
