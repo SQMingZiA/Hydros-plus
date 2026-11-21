@@ -32,38 +32,36 @@ enum class FontChoice(val label: String) {
 }
 
 /**
- * iOS 字体组合：拉丁字母/数字用 SF Pro（大字号 Display、正文 Text），中文回退到苹方对应字重。
- * 每个字重内先放 SF Pro 再放苹方，缺字时由系统按顺序回退，得到与 iOS 一致的混排效果。
+ * 内置苹方家族：每个字重只绑定一个字体文件，中文与数字/拉丁统一使用苹方。
+ * 注意 Compose 的 FontFamily 不逐字形回退——同一字重下只取第一个字体，
+ * 因此不能把 SF Pro 与苹方并列在同一个字重里（否则中文会被系统字体兜底）。
  */
 data class HydrosFontSet(val display: FontFamily, val text: FontFamily)
 
-/** 内置苹果字体（SF Pro + 苹方 Regular/Medium/Bold），不受系统主题字体影响。 */
-val HydrosAppleDisplay: FontFamily = FontFamily(
-    Font(R.font.sf_pro_display_regular, FontWeight.Normal),
+/** 苹方大字号字族（Regular / Medium / Bold），用于 display* 与 headline*。 */
+val HydrosPingFangDisplay: FontFamily = FontFamily(
     Font(R.font.pingfang_regular, FontWeight.Normal),
-    Font(R.font.sf_pro_display_regular, FontWeight.Medium),
     Font(R.font.pingfang_medium, FontWeight.Medium),
-    Font(R.font.sf_pro_display_semibold, FontWeight.SemiBold),
     Font(R.font.pingfang_medium, FontWeight.SemiBold),
-    Font(R.font.sf_pro_display_bold, FontWeight.Bold),
     Font(R.font.pingfang_bold, FontWeight.Bold),
 )
 
-val HydrosAppleText: FontFamily = FontFamily(
-    Font(R.font.sf_pro_text_regular, FontWeight.Normal),
+/** 苹方正文字族（Regular / Medium / Bold），用于 title* / body* / label*。 */
+val HydrosPingFangText: FontFamily = FontFamily(
     Font(R.font.pingfang_regular, FontWeight.Normal),
-    Font(R.font.sf_pro_text_medium, FontWeight.Medium),
     Font(R.font.pingfang_medium, FontWeight.Medium),
-    Font(R.font.sf_pro_text_semibold, FontWeight.SemiBold),
-    Font(R.font.pingfang_bold, FontWeight.SemiBold),
-    Font(R.font.sf_pro_text_semibold, FontWeight.Bold),
+    Font(R.font.pingfang_medium, FontWeight.SemiBold),
     Font(R.font.pingfang_bold, FontWeight.Bold),
 )
+
+/** 旧名保留（外部若引用仍可编译），均指向纯苹方家族。 */
+val HydrosAppleDisplay: FontFamily = HydrosPingFangDisplay
+val HydrosAppleText: FontFamily = HydrosPingFangText
 
 val HydrosSystemFontSet = HydrosFontSet(FontFamily.SansSerif, FontFamily.SansSerif)
 
 fun FontChoice.fontSet(): HydrosFontSet = when (this) {
-    FontChoice.PINGFANG -> HydrosFontSet(HydrosAppleDisplay, HydrosAppleText)
+    FontChoice.PINGFANG -> HydrosFontSet(HydrosPingFangDisplay, HydrosPingFangText)
     FontChoice.SYSTEM -> HydrosSystemFontSet
 }
 

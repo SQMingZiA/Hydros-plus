@@ -57,7 +57,11 @@ fun HomeScreen(
     onWallet: () -> Unit = {}
 ) {
     val connected = state.connectedDeviceIds.mapNotNull { id -> state.devices.find { it.id == id } }
-    val favorites = connected.filter { it.id in state.favoriteDeviceIds }
+    // 「我的设备」= 收藏过的设备（不再要求它此刻仍处于最近连接），并按收藏顺序展示。
+    val favorites = remember(state.devices, state.connectedDeviceIds, state.favoriteDeviceIds) {
+        val pool = (state.devices + connected).distinctBy { it.id }
+        state.favoriteDeviceIds.mapNotNull { id -> pool.find { it.id == id } }
+    }
     val today = remember { LocalDate.now() }
     val todayCount = remember(state.waterUsage, today) { todaySessions(state.waterUsage, today) }
     val session = state.session
@@ -164,13 +168,23 @@ fun HomeScreen(
                     onClick = onWallet
                 )
             }
+            SectionHeader("我的设备")
             if (favorites.isNotEmpty()) {
-                SectionHeader("我的设备")
                 GlassPanel(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
                     favorites.forEachIndexed { index, device ->
                         if (index > 0) SubtleDivider(horizontalPadding = 0.dp)
                         FavoriteDeviceRow(device, state.deviceRemarks) { onDevice(device.id) }
                     }
+                }
+            } else {
+                GlassPanel(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
+                    MineRow(
+                        "还没有收藏设备",
+                        supporting = "在设备详情里点「收藏」，就会固定出现在这里",
+                        icon = R.drawable.ic_star,
+                        tone = IconTone.NEUTRAL,
+                        onClick = onScan,
+                    )
                 }
             }
             // 显示设置里可以关掉“连接身边的设备”入口，关闭后首页不再渲染它。

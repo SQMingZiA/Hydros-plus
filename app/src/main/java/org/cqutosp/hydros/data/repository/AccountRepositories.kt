@@ -10,6 +10,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
 
 enum class ReauthenticationReason { EXPIRED, ACCOUNT_CHANGED }
 data class ReauthenticationNotice(val id: Long, val message: String,
@@ -42,17 +43,28 @@ interface AuthRepository {
 private val SMS_SALT = byteArrayOf(107, 108, 99, 120)
 fun passwordHash(password: String) = DeviceSigner.md5Hex(password).takeLast(10).uppercase()
 fun smsSecret(phone: String) = DeviceSigner.md5Hex(phone.take(3) + phone.takeLast(4) + String(SMS_SALT, Charsets.UTF_8))
-class RealAuthRepository(private val transport: CampusTransport, private val store: HydrosStore, nowMillis: () -> Long = { System.nanoTime() / 1_000_000 }, private val validateIdentity: (Credentials) -> Unit = {}) : AuthRepository {
+class RealAuthRepository(private val transport: CampusTransport, private val store: HydrosStore, private val nowMillis: () -> Long = { System.nanoTime() / 1_000_000 }, private val validateIdentity: (Credentials) -> Unit = {}) : AuthRepository {
     private val current = MutableStateFlow(AuthState())
     override val authState = current.asStateFlow()
     override val credentials: StateFlow<Credentials?> = CredentialState(authState)
     private var noticeSequence = 0L
     private val lock = Mutex()
+    private val probeLock = Mutex()
+    /** 同一份凭证只确认一次：并发请求复用同一个探测结论，避免重复请求鉴权接口。 */
+    private val probeCache = ConcurrentHashMap<String, Pair<SessionVerdict, Long>>()
     private val loginThrottle = LoginThrottle(nowMillis)
     override val loginRetryAfterMillis: Long get() = loginThrottle.retryAfterMillis()
     override fun requireCredentials() = credentials.value ?: throw ApiFailure(null, "请先登录")
     override suspend fun restore() = lock.withLock {
-        if (current.value.reauthentication == null) current.value = AuthState(store.credentials())
+        if (current.value.reauthentication == null) {
+            val stored = store.credentials()
+            if (stored == null && store.hasStoredCredentials()) {
+                // 密文仍在但此刻解不出（Keystore 密钥轮换、系统恢复、换签名安装）：
+                // 保留 SavedAccount 与提示状态，绝不在恢复失败时顺手清空本地账户数据。
+                HydrosLog.log("auth", "本地凭证密文暂时无法解出，保留账户数据，等待重新登录")
+            }
+            current.value = AuthState(stored)
+        }
     }
     override suspend fun login(phone: String, secret: String, sms: Boolean) = loginThrottle.run { lock.withLock {
         val fields = mapOf("telephone" to phone, "phoneSystem" to "android", "version" to "6.5.28", "type" to if(sms) "5" else "0") +
@@ -62,17 +74,54 @@ class RealAuthRepository(private val transport: CampusTransport, private val sto
         fun needed(value: String?) = value?.takeIf { it.isNotBlank() } ?: throw ApiFailure(null, "登录返回缺少凭证")
         val auth = Credentials(needed(data.text("loginCode")), needed(data.text("userId")), needed(account.text("accountId")), needed(account.text("projectId")), phone)
         validateIdentity(auth)
-        store.credentials(auth); current.value = AuthState(auth)
+        store.credentials(auth); probeCache.clear(); current.value = AuthState(auth)
     } }
     override suspend fun sendCode(phone: String, type: Int) {
         transport.get("user/verification/code/get", mapOf("telephone" to phone, "secret" to smsSecret(phone), "typeId" to type.toString(), "platform" to "1"),
             if(type == 3) null else requireCredentials()).requireSuccess()
     }
-    override suspend fun logout() = lock.withLock { store.credentials(null); current.value = AuthState() }
+    override suspend fun logout() = lock.withLock {
+        store.credentials(null); probeCache.clear(); current.value = AuthState()
+    }
+    /**
+     * 轻量鉴权探测：确认"登录已失效"是服务端真实失效，还是业务文案/网关错误页的误判。
+     * VALID 表示凭证仍然有效；EXPIRED 表示确认失效；UNKNOWN 表示暂时无法判断（网络/5xx）。
+     */
+    suspend fun verifySession(expected: Credentials): SessionVerdict = probeLock.withLock {
+        val now = nowMillis()
+        val cached = probeCache[expected.key]
+        if (cached != null && now - cached.second <= PROBE_TTL_MILLIS) {
+            cached.first
+        } else {
+            val verdict = try {
+                val response = transport.probe("account/info", expected)
+                when {
+                    response.ok -> SessionVerdict.VALID
+                    isSessionExpiry(response.displayMessage) -> SessionVerdict.EXPIRED
+                    else -> SessionVerdict.UNKNOWN
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: ApiFailure) {
+                if (error.expired) SessionVerdict.EXPIRED else SessionVerdict.UNKNOWN
+            } catch (_: Exception) {
+                SessionVerdict.UNKNOWN
+            }
+            probeCache[expected.key] = verdict to now
+            HydrosLog.log("auth", "会话探测结果=" + verdict.name + "（key=" + expected.key + "）")
+            verdict
+        }
+    }
+    /**
+     * 由传输层在确认（必要时经 [verifySession] 探测）会话确实失效后调用。
+     * 只清除本地凭证与 SavedAccount 之外的登录态，不删除账户数据，并挂一条重新登录提示。
+     */
     suspend fun expire(expected: Credentials, message: String = "登录已失效，请重新登录",
         reason: ReauthenticationReason = ReauthenticationReason.EXPIRED) = lock.withLock {
         if(current.value.credentials == expected) {
             store.credentials(null)
+            probeCache.remove(expected.key)
+            HydrosLog.log("auth", "清除本地登录状态（" + reason.name + "）")
             current.value = AuthState(reauthentication = ReauthenticationNotice(++noticeSequence, message, reason))
         }
     }
@@ -89,6 +138,10 @@ class RealAuthRepository(private val transport: CampusTransport, private val sto
         val auth = requireCredentials()
         val fields = mapOf("password" to passwordHash(password)) + if(old != null) mapOf("oldPassword" to passwordHash(old)) else mapOf("code" to requireNotNull(code))
         transport.post(if(old != null) "user/password/update" else "user/password/forget", fields, auth).requireSuccess()
+    }
+    private companion object {
+        /** 探测结论缓存窗口：一次误判会命中多个并发请求，没必要反复确认。 */
+        const val PROBE_TTL_MILLIS = 30_000L
     }
 }
 interface AccountRepository { suspend fun load(auth: Credentials): AccountUi }

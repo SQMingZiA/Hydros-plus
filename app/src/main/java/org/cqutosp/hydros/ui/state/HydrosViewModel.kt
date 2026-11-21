@@ -162,6 +162,10 @@ class HydrosViewModel(
                             walletError = null, billsError = null, message = null) }
                         return@collectLatest
                     }
+                    if (auth == null && runCatching { graph.store.hasStoredCredentials() }.getOrDefault(false)) {
+                        // 密文还在、只是这次没解出来：保留本地账户与设备数据，不触发任何清理。
+                        HydrosLog.log("auth", "启动时无法解出本地凭证，保留账户数据与登录入口")
+                    }
                     graph.sessions.restore(auth)
                     val saved = auth?.let { graph.store.account(it.key) }
                     mutable.update { current -> HydrosUiState(initializing=false, signedIn=auth != null,
@@ -551,11 +555,17 @@ class HydrosViewModel(
         graph.scope.launch {
             action(operation = FailureOperation.FAVORITE) {
                 val auth = graph.auth.requireCredentials()
+                // 详情页里点收藏的设备可能还没进 recent，只要当前会话里认得这台设备就允许收藏，
+                // 并把设备快照一起写进账号，重启后「我的设备」才不会丢。
+                val known = state.value.devices.find { it.id == deviceId }
                 val saved = graph.store.updateAccount(auth.key) {
                     when {
                         deviceId in it.favorites -> it.copy(favorites = it.favorites - deviceId, deviceRemarks = it.deviceRemarks - deviceId)
-                        deviceId in it.recent -> it.copy(favorites = it.favorites + deviceId)
-                        else -> it
+                        known != null || deviceId in it.recent -> it.copy(
+                            favorites = it.favorites + deviceId,
+                            devices = known?.let { device -> it.devices.filterNot { d -> d.id == deviceId } + device } ?: it.devices,
+                        )
+                        else -> throw ApiFailure(null, "设备不存在，请重新扫描后再收藏")
                     }
                 }
                 if(graph.auth.credentials.value == auth) mutable.update { it.copy(favoriteDeviceIds=saved.favorites, deviceRemarks=saved.deviceRemarks) }

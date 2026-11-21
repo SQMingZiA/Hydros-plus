@@ -48,13 +48,26 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import org.cqutosp.hydros.ui.theme.LocalHydrosGradient
+import org.cqutosp.hydros.ui.theme.LocalHydrosGradientEnabled
 import androidx.activity.compose.LocalActivity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -656,10 +669,10 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                         composable("thirdparty/dorm") {
                             HydrosPage("绑定寝室", onBack = { back() }) {
                                 val dorm by thirdParty.dorm.collectAsStateWithLifecycle()
-                                // 默认扫描附近蓝牙设备，用户优先从列表里选，输入法只是备选。
-                                LaunchedEffect(Unit) { model.discoverNearby() }
+                                // 扫描由页面在“选择设备”阶段自己发起，这里不再重复启动 BLE。
                                 DormBindingScreen(dorm.bound, dorm.editing, dorm.error,
                                     onSave = thirdParty::saveDorm, onClear = thirdParty::clearDorm,
+                                    onEdit = thirdParty::startEditDorm, onCancelEdit = thirdParty::cancelEditDorm,
                                     nearbyDevices = state.nearby.devices.map { device ->
                                         DormNearbyDevice(
                                             id = device.id,
@@ -1022,16 +1035,42 @@ internal fun HomeWalletTabs(progress: Float, onSelect: (Int) -> Unit) {
     }
 }
 
-/** 液态玻璃底部导航：透明胶囊 + 选中弹簧动效 + 右下角扫码渐变按钮。 */
+/** 液态玻璃底部导航：背景采样胶囊 + 选中弹簧动效 + 右下角扫码玻璃球。 */
 @Composable
 internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan: () -> Unit, onHeight: (Int) -> Unit) {
     val haptics = rememberHydrosHaptics()
     val density = LocalDensity.current
     val dark = isDarkScheme()
+    val gradient = LocalHydrosGradient.current
+    val gradientEnabled = LocalHydrosGradientEnabled.current
     val barHeight = 52.dp
+    val glassShape = RoundedCornerShape(999.dp)
+    val windowInfo = LocalWindowInfo.current
+    var barPosition by remember { mutableStateOf(Offset.Zero) }
+    val screenWidth = windowInfo.containerSize.width.takeIf { it > 0 }?.toFloat()
+        ?: with(density) { 400.dp.toPx() }
+    val screenHeight = windowInfo.containerSize.height.takeIf { it > 0 }?.toFloat()
+        ?: with(density) { 800.dp.toPx() }
+    val parallax = Offset(
+        x = -(barPosition.x / screenWidth) * with(density) { 22.dp.toPx() },
+        y = -(barPosition.y / screenHeight) * with(density) { 14.dp.toPx() }
+    )
+    // 采样层只模糊一次：只随窗口位置变化，不做逐帧全屏截图。
+    val blurEdge = if (Build.VERSION.SDK_INT >= 33) {
+        BlurredEdgeTreatment.Unbounded
+    } else {
+        // API 31/32 上 Unbounded 在部分设备会出现黑边，退回按边界裁剪。
+        BlurredEdgeTreatment.Rectangle
+    }
+    val tintAlpha = if (dark) 0.08f else 0.13f
+    val rimColor = if (dark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.66f)
+    val topHighlight = if (dark) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.72f)
+    val bottomShadow = if (dark) Color.Black.copy(alpha = 0.34f) else Color.Black.copy(alpha = 0.06f)
+    val sampleAlpha = if (dark) 0.58f else 0.52f
     Box(
         Modifier.fillMaxWidth()
             .onSizeChanged { onHeight(it.height + with(density) { 12.dp.roundToPx() }) }
+            .onGloballyPositioned { barPosition = it.positionInWindow() }
             .testTag("main-bottom-bar")
     ) {
         Row(
@@ -1042,11 +1081,38 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
         ) {
             Box(
                 Modifier.weight(1f).height(barHeight)
-                    .shadow(16.dp, RoundedCornerShape(999.dp))
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(if (dark) Color(0x29FFFFFF) else Color(0x61FFFFFF))
-                    .border(0.8.dp, if (dark) Color(0x1FFFFFFF) else Color(0x66FFFFFF), RoundedCornerShape(999.dp))
+                    .shadow(16.dp, glassShape)
+                    .clip(glassShape)
+                    .background(if (dark) Color(0x14FFFFFF) else Color(0x33FFFFFF))
             ) {
+                // 1) 背景采样：复用页面渐变光斑，按导航栏在屏幕中的位置做视差偏移后模糊成液体。
+                Canvas(
+                    Modifier.matchParentSize()
+                        .graphicsLayer { alpha = sampleAlpha }
+                        .blur(20.dp, blurEdge)
+                ) {
+                    drawGlassSample(gradient, gradientEnabled, dark, parallax)
+                }
+                // 2) 玻璃 tint
+                Box(Modifier.matchParentSize().background(Color.White.copy(alpha = tintAlpha)))
+                // 3) 上缘高光
+                Box(
+                    Modifier.align(Alignment.TopCenter).fillMaxWidth(0.9f).height(1.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color.Transparent, topHighlight, Color.Transparent)
+                            )
+                        )
+                )
+                // 4) 下缘内阴影：玻璃厚度
+                Box(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.94f).height(1.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color.Transparent, bottomShadow, Color.Transparent)
+                            )
+                        )
+                )
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                     destinations.forEach { destination ->
                         val selected = route == destination.route
@@ -1057,18 +1123,34 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                         )
                         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                             Box(
-                                Modifier
-                                    .fillMaxWidth(0.82f)
-                                    .height(40.dp)
-                                    .graphicsLayer {
-                                        scaleX = 0.9f + 0.1f * scale
-                                        scaleY = 0.9f + 0.1f * scale
-                                        alpha = 0.85f + 0.15f * scale
-                                    }
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.13f * scale)),
+                                Modifier.fillMaxWidth(0.82f).height(40.dp),
                                 contentAlignment = Alignment.Center
                             ) {
+                                // 只有选中的 tab 才有玻璃内胆：内胆单独一层，随选中进度淡入。
+                                Box(
+                                    Modifier
+                                        .matchParentSize()
+                                        .graphicsLayer {
+                                            scaleX = 0.9f + 0.1f * scale
+                                            scaleY = 0.9f + 0.1f * scale
+                                            alpha = scale
+                                        }
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(
+                                                    Color.White.copy(alpha = if (dark) 0.10f else 0.30f),
+                                                    MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.26f else 0.16f),
+                                                    MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.18f else 0.10f)
+                                                )
+                                            )
+                                        )
+                                        .border(
+                                            0.5.dp,
+                                            Color.White.copy(alpha = if (dark) 0.22f else 0.55f),
+                                            RoundedCornerShape(999.dp)
+                                        )
+                                )
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Glyph(
                                         if (selected) destination.icon else destination.iconOutline,
@@ -1094,21 +1176,128 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                         }
                     }
                 }
+                // 5) 玻璃描边最后绘制，压住采样层与染色层。
+                Box(Modifier.matchParentSize().border(0.8.dp, rimColor, glassShape))
             }
             Box(
                 Modifier
                     .size(56.dp)
-                    .hydrosPressable { haptics.light(); onScan() }
+                    .hydrosPressable(pressedScale = 0.94f) { haptics.light(); onScan() }
                     .shadow(14.dp, CircleShape)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(IosTokens.FabStart, IosTokens.FabEnd)))
+                    .drawBehind {
+                        val ballRadius = size.minDimension / 2f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    lerp(IosTokens.FabStart, Color.White, 0.62f),
+                                    IosTokens.FabStart,
+                                    lerp(IosTokens.FabEnd, Color.Black, 0.18f)
+                                ),
+                                center = Offset(size.width * 0.36f, size.height * 0.30f),
+                                radius = ballRadius * 1.18f
+                            ),
+                            radius = ballRadius,
+                            center = center
+                        )
+                    }
+                    .border(1.dp, Color.White.copy(alpha = 0.40f), CircleShape)
                     .testTag("scan-action"),
                 contentAlignment = Alignment.Center
             ) {
+                Canvas(Modifier.matchParentSize()) {
+                    val inset = 1.6.dp.toPx()
+                    val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
+                    // 左上 120° 环境反射高光
+                    drawArc(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.62f),
+                                Color.White.copy(alpha = 0.10f),
+                                Color.Transparent
+                            ),
+                            start = Offset(inset, inset),
+                            end = Offset(size.width * 0.72f, size.height * 0.72f)
+                        ),
+                        startAngle = -168f,
+                        sweepAngle = 118f,
+                        useCenter = false,
+                        topLeft = Offset(inset, inset),
+                        size = arcSize,
+                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                    // 右下淡内阴影
+                    drawArc(
+                        brush = Brush.linearGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.20f)),
+                            start = Offset(size.width * 0.55f, size.height * 0.55f),
+                            end = Offset(size.width, size.height)
+                        ),
+                        startAngle = 18f,
+                        sweepAngle = 96f,
+                        useCenter = false,
+                        topLeft = Offset(inset, inset),
+                        size = arcSize,
+                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
                 Glyph(R.drawable.ic_scan, modifier = Modifier.size(24.dp), tint = Color.White, description = "扫码")
             }
         }
     }
+}
+
+/**
+ * 底部导航玻璃的“背景采样”：把页面同一套渐变光斑按导航栏位置偏移后画进胶囊，
+ * 再交给 blur 模糊，形成透出页面色彩的液体玻璃。关闭渐变时只保留淡品牌色。
+ */
+private fun DrawScope.drawGlassSample(
+    preset: GradientPreset,
+    enabled: Boolean,
+    dark: Boolean,
+    parallax: Offset,
+) {
+    val w = size.width
+    val h = size.height
+    drawRect(if (dark) IosTokens.PageDark else IosTokens.HomePage)
+    if (!enabled) {
+        drawRect(
+            Brush.verticalGradient(
+                listOf(preset.start.copy(alpha = if (dark) 0.10f else 0.06f), Color.Transparent)
+            )
+        )
+        return
+    }
+    drawRect(
+        Brush.verticalGradient(
+            listOf(
+                preset.start.copy(alpha = if (dark) 0.30f else 0.20f),
+                preset.end.copy(alpha = if (dark) 0.14f else 0.08f),
+                Color.Transparent
+            )
+        )
+    )
+    drawGlassBlob(preset.blobMint, w * 0.12f + parallax.x, -h * 0.25f + parallax.y, w * 0.95f, if (dark) 0.55f else 0.90f)
+    drawGlassBlob(preset.blobSky, w * 0.80f + parallax.x, h * 0.15f + parallax.y, w * 0.85f, if (dark) 0.48f else 0.80f)
+    drawGlassBlob(preset.blobLilac, w * 0.50f + parallax.x, h * 1.20f + parallax.y, w * 0.85f, if (dark) 0.34f else 0.55f)
+}
+
+private fun DrawScope.drawGlassBlob(
+    color: Color,
+    cx: Float,
+    cy: Float,
+    radius: Float,
+    alpha: Float,
+) {
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(color.copy(alpha = alpha), Color.Transparent),
+            center = Offset(cx, cy),
+            radius = radius
+        ),
+        radius = radius,
+        center = Offset(cx, cy)
+    )
 }
 
 /** 底部“充值”标签页的内容：余额 + 套餐 + 支付方式，并处理支付跳转。 */

@@ -1,6 +1,7 @@
 package org.cqutosp.hydros.data.network
 
 import org.cqutosp.hydros.data.feedback.*
+import org.cqutosp.hydros.ui.state.HydrosLog
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.math.BigDecimal
@@ -15,16 +16,23 @@ import java.math.BigDecimal
 open class ApiFailure(val code: Int?, override val message: String, val expired: Boolean = false) : Exception(message)
 /** Only an explicit rejection before a potentially successful command permits a channel change. */
 class CloudDeviceOffline : ApiFailure(306, "设备无法通过云端开启")
+/** 一次会话探测的结论：有效、确认失效，或暂时无法判断（网络/网关异常）。 */
+enum class SessionVerdict { VALID, EXPIRED, UNKNOWN }
 interface CampusTransport {
     suspend fun get(path: String, fields: Map<String, String> = emptyMap(), auth: Credentials? = null): ApiResponse<JsonElement>
     suspend fun post(path: String, fields: Map<String, String> = emptyMap(), auth: Credentials? = null): ApiResponse<JsonElement>
+    /** 轻量鉴权探测：只判断凭证是否仍被服务端接受，绝不再触发"登录已失效"回调。 */
+    suspend fun probe(path: String, auth: Credentials): ApiResponse<JsonElement> = get(path, auth = auth)
 }
 class HttpCampusTransport(private val api: CampusApi, private val isCurrent: (Credentials) -> Boolean = { true },
     private val recovery: NetworkRecovery? = null,
+    private val verifySession: (suspend (Credentials) -> SessionVerdict)? = null,
     private val onExpired: suspend (Credentials) -> Unit) : CampusTransport {
     override suspend fun get(path: String, fields: Map<String, String>, auth: Credentials?) = call(false, path, fields, auth)
     override suspend fun post(path: String, fields: Map<String, String>, auth: Credentials?) = call(true, path, fields, auth)
-    private suspend fun call(post: Boolean, path: String, fields: Map<String, String>, auth: Credentials?): ApiResponse<JsonElement> {
+    override suspend fun probe(path: String, auth: Credentials) = call(false, path, emptyMap(), auth, observeExpiry = false)
+    private suspend fun call(post: Boolean, path: String, fields: Map<String, String>, auth: Credentials?,
+        observeExpiry: Boolean = true): ApiResponse<JsonElement> {
         try {
         if (auth != null && !isCurrent(auth)) throw ApiFailure(null, "登录状态已变化", true)
         // Business telephone overrides authentication telephone only for SMS to a new number.
@@ -52,12 +60,12 @@ class HttpCampusTransport(private val api: CampusApi, private val isCurrent: (Cr
         }
         val response = if (isReadOnlyCampusRequest(path, post)) retryReadQuery { execute(it) } else execute(null)
         if (auth != null && !isCurrent(auth)) throw ApiFailure(null, "登录状态已变化", true)
-        if (auth != null && response.code() in listOf(401, 403)) { onExpired(auth); throw ApiFailure(response.code(), "登录已失效，请重新登录", true) }
+        if (auth != null && response.code() in listOf(401, 403))
+            throw expiryFailure(path, auth, response.code(), "登录已失效，请重新登录", observeExpiry)
         if (!response.isSuccessful) throw AppFailure(feedbackOperationFor(path), FailureStage.RESPONSE, FailureReason.REJECTED, ApiFailure(response.code(), "HTTP rejection"))
         val body = response.body() ?: throw ApiFailure(null, "服务返回为空")
-        if (auth != null && !body.ok && isSessionExpiry(body.displayMessage)) {
-            onExpired(auth); throw ApiFailure(body.errorCode, "登录已失效，请重新登录", true)
-        }
+        if (auth != null && !body.ok && isSessionExpiry(body.displayMessage))
+            throw expiryFailure(path, auth, body.errorCode, body.displayMessage, observeExpiry)
         return body
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
@@ -67,6 +75,31 @@ class HttpCampusTransport(private val api: CampusApi, private val isCurrent: (Cr
             if (error is java.io.IOException || error is kotlinx.serialization.SerializationException)
                 throw classifyFailure(error, feedbackOperationFor(path), FailureStage.NETWORK)
             throw error
+        }
+    }
+
+    /**
+     * 状态码/文案疑似表示登录失效时先做二次探测再决定是否登出：
+     * 只有确认失效才回调 onExpired；探测成功（误报）或网络异常则保留本地凭证并抛出普通错误，
+     * 避免服务端一条业务文案或网关错误页就把用户永久踢出登录。
+     */
+    private suspend fun expiryFailure(path: String, auth: Credentials, code: Int?, serverMessage: String?,
+        observeExpiry: Boolean): ApiFailure {
+        if (!observeExpiry) return ApiFailure(code, serverMessage ?: "登录已失效，请重新登录", true)
+        return when (verifySession?.invoke(auth)) {
+            SessionVerdict.VALID -> {
+                HydrosLog.log("auth", "疑似会话过期但探测成功（$path，code=$code），判定为误报，保留登录状态")
+                ApiFailure(null, "服务暂时不可用，请稍后重试", false)
+            }
+            SessionVerdict.UNKNOWN -> {
+                HydrosLog.log("auth", "疑似会话过期但探测未完成（$path，code=$code），保留登录状态并按网络异常处理")
+                ApiFailure(null, "网络异常，请稍后重试", false)
+            }
+            else -> {
+                HydrosLog.log("auth", "探测确认会话已失效（$path，code=$code），清除本地登录状态")
+                onExpired(auth)
+                ApiFailure(code, serverMessage ?: "登录已失效，请重新登录", true)
+            }
         }
     }
 

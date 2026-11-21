@@ -90,7 +90,10 @@ fun createDependencies(app: Application): HydrosDependencies {
         android.util.Log.i("HydrosNetwork", "path=${it.path} stage=${it.stage} network=${if (it.cellular) "cellular" else "default"} elapsedMs=${it.elapsedMillis} http=${it.httpCode} business=${it.businessCode} failure=${it.failure ?: "none"}")
     })
     val transport = HttpCampusTransport(CampusApiFactory.create(BuildConfig.CAMPUS_BASE_URL),
-        isCurrent = { auth.credentials.value == it }, recovery = recovery, onExpired = { auth.expire(it) })
+        isCurrent = { auth.credentials.value == it }, recovery = recovery,
+        // 疑似"登录已失效"时先探测一次：只有确认失效才真的登出，误判/网络异常都保留凭证。
+        verifySession = { expected -> auth.verifySession(expected) },
+        onExpired = { auth.expire(it) })
     val sessions = RealSessionRepository(transport, store, operation)
     auth = RealAuthRepository(transport, store) { candidate ->
         val pending = sessions.session.value

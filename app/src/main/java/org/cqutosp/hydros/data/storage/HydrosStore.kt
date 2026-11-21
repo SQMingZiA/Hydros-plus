@@ -2,6 +2,8 @@ package org.cqutosp.hydros.data.storage
 
 import org.cqutosp.hydros.data.feedback.*
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.datastore.preferences.core.edit
@@ -16,17 +18,19 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 @Serializable data class SavedAccount(val devices: List<DeviceUi> = emptyList(), val favorites: Set<String> = emptySet(),
     val recent: List<String> = emptyList(), val session: SessionUi? = null,
     val deviceRemarks: Map<String, String> = emptyMap())
 @Serializable data class FeedbackSettings(val hapticFeedbackEnabled: Boolean = true, val reduceMotionEnabled: Boolean = false)
-@Serializable private data class SavedSettings(val token: String? = null, val lastAccount: String? = null, val theme: String = "SYSTEM", val accounts: Map<String, SavedAccount> = emptyMap(), val onboardingCompleted: Boolean = false,
+@Serializable private data class SavedSettings(val token: String? = null, /** 不依赖 Keystore 的后备密文，默认 null 以兼容旧版数据。 */ val tokenBackup: String? = null, val lastAccount: String? = null, val theme: String = "SYSTEM", val accounts: Map<String, SavedAccount> = emptyMap(), val onboardingCompleted: Boolean = false,
     val feedback: FeedbackSettings = FeedbackSettings(), val fontSizeScale: Float = 1f,
     val postSessionDestination: String = PostSessionDestination.BILL.name,
     val homeConnectCardVisible: Boolean = true, val waterLimitCents: Long? = null,
@@ -37,6 +41,8 @@ import javax.crypto.spec.GCMParameterSpec
 interface HydrosStore {
     suspend fun credentials(): Credentials?
     suspend fun credentials(value: Credentials?)
+    /** 本地是否仍存有凭证密文：用于区分"确实未登录"与"密文暂时解不出"。 */
+    suspend fun hasStoredCredentials(): Boolean = false
     suspend fun lastAccount(): String? = null
     suspend fun account(key: String): SavedAccount
     suspend fun updateAccount(key: String, transform: (SavedAccount) -> SavedAccount): SavedAccount
@@ -95,11 +101,13 @@ interface HydrosStore {
 }
 private val Context.hydrosPreferences by preferencesDataStore("hydros")
 class PreferencesHydrosStore(context: Context) : HydrosStore {
-    private val preferences = context.applicationContext.hydrosPreferences
+    private val appContext = context.applicationContext
+    private val preferences = appContext.hydrosPreferences
     private val key = stringPreferencesKey("settings")
     private val json = Json { ignoreUnknownKeys = true }
     private val lock = Mutex()
     private val secret = CredentialCipher()
+    private val backup = BackupCredentialCipher(appContext)
     private suspend fun read(): SavedSettings = failureBoundary(FailureOperation.RESTORE, FailureStage.STORAGE) { preferences.data.first()[key]?.let {
         json.decodeFromString<SavedSettings>(it)
     } ?: SavedSettings() }
@@ -113,17 +121,43 @@ class PreferencesHydrosStore(context: Context) : HydrosStore {
         }
         requireNotNull(next)
     } }
+    /**
+     * 读取顺序：主密文（Android Keystore）→ 后备密文（签名派生密钥）。
+     * 后备密文解出后回写主密文自愈，下次重新走快路径；两路都失败也不抹掉 token，
+     * 保留 lastAccount 供登录页回填手机号。
+     */
     override suspend fun credentials(): Credentials? {
-        val encoded = read().token ?: return null
-        return try { json.decodeFromString<Credentials>(secret.decrypt(encoded)) }
-        catch (_: Exception) {
-            // 解密失败通常意味着 Android Keystore 里的会话密钥失效（换签名安装、系统重置密钥等）。
-            // 这里不要直接 credentials(null) 把 token 抹掉：保留 lastAccount 以便登录页回填手机号，
-            // 也避免一次读取失败就把本地凭证永久删除。
-            null
+        val settings = read()
+        decodeToken(settings.token)?.let { return it }
+        val recovered = decodeBackup(settings.tokenBackup) ?: return null
+        runCatching {
+            edit { current ->
+                if (current.tokenBackup == null) current
+                else current.copy(token = runCatching { secret.encrypt(json.encodeToString(recovered)) }.getOrNull())
+            }
         }
+        return recovered
     }
-    override suspend fun credentials(value: Credentials?) { edit { it.copy(token = value?.let { auth -> secret.encrypt(json.encodeToString(auth)) }, lastAccount=value?.key ?: it.lastAccount) } }
+    /** 双写：Keystore 主密文失败时后备密文仍在，任何情况下都不会退化成明文 token。 */
+    override suspend fun credentials(value: Credentials?) { edit { current ->
+        if (value == null) current.copy(token = null, tokenBackup = null)
+        else {
+            val payload = json.encodeToString(value)
+            current.copy(token = runCatching { secret.encrypt(payload) }.getOrNull(),
+                tokenBackup = runCatching { backup.encrypt(payload) }.getOrNull(),
+                lastAccount = value.key)
+        }
+    } }
+    override suspend fun hasStoredCredentials(): Boolean {
+        val settings = read()
+        return settings.token != null || settings.tokenBackup != null
+    }
+    private fun decodeToken(encoded: String?): Credentials? = try {
+        encoded?.let { json.decodeFromString<Credentials>(secret.decrypt(it)) }
+    } catch (_: Exception) { null }
+    private fun decodeBackup(encoded: String?): Credentials? = try {
+        encoded?.let { json.decodeFromString<Credentials>(backup.decrypt(it)) }
+    } catch (_: Exception) { null }
     override suspend fun lastAccount()=read().lastAccount
     override suspend fun account(key: String) = read().accounts[key] ?: SavedAccount()
     override suspend fun updateAccount(key: String, transform: (SavedAccount) -> SavedAccount): SavedAccount {
@@ -193,5 +227,36 @@ class CredentialCipher {
         val parts = value.split(":", limit = 2)
         init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.getDecoder().decode(parts[0])))
         String(doFinal(Base64.getDecoder().decode(parts[1])), Charsets.UTF_8)
+    }
+}
+/**
+ * 后备密文：完全不依赖 Android Keystore，用于主密钥被系统销毁后的自动恢复。
+ * 密钥由应用签名证书摘要 + 包名 + 设备/构建信息派生（同签名重装或系统重置密钥后仍可解出），
+ * 磁盘上同样只保存密文与随机 IV，不出现明文 token。
+ */
+class BackupCredentialCipher(context: Context) {
+    private val appContext = context.applicationContext
+    private fun keyBytes(): ByteArray {
+        val signing = runCatching {
+            @Suppress("DEPRECATION")
+            val info = appContext.packageManager.getPackageInfo(appContext.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            info.signingInfo?.apkContentsSigners?.firstOrNull()?.toByteArray() ?: ByteArray(0)
+        }.getOrDefault(ByteArray(0))
+        val material = appContext.packageName.toByteArray(Charsets.UTF_8) + signing +
+            Build.MANUFACTURER.toByteArray(Charsets.UTF_8) + Build.MODEL.toByteArray(Charsets.UTF_8) +
+            Build.DEVICE.toByteArray(Charsets.UTF_8) + Build.FINGERPRINT.toByteArray(Charsets.UTF_8) + SALT
+        return MessageDigest.getInstance("SHA-256").digest(material)
+    }
+    fun encrypt(value: String): String = Cipher.getInstance("AES/GCM/NoPadding").run {
+        init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes(), "AES"))
+        Base64.getEncoder().encodeToString(iv) + ":" + Base64.getEncoder().encodeToString(doFinal(value.toByteArray(Charsets.UTF_8)))
+    }
+    fun decrypt(value: String): String = Cipher.getInstance("AES/GCM/NoPadding").run {
+        val parts = value.split(":", limit = 2)
+        init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes(), "AES"), GCMParameterSpec(128, Base64.getDecoder().decode(parts[0])))
+        String(doFinal(Base64.getDecoder().decode(parts[1])), Charsets.UTF_8)
+    }
+    private companion object {
+        val SALT = "hydros.session.backup.v1".toByteArray(Charsets.UTF_8)
     }
 }
