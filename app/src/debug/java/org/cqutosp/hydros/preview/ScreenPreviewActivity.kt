@@ -65,6 +65,7 @@ import org.cqutosp.hydros.ui.screens.ReleaseHistoryScreen
 import org.cqutosp.hydros.ui.screens.ScanContent
 import org.cqutosp.hydros.ui.screens.SessionScreen
 import org.cqutosp.hydros.ui.screens.SoftwareUpdateScreen
+import org.cqutosp.hydros.ui.screens.UpdateSourceScreen
 import org.cqutosp.hydros.ui.screens.UseCodeScreen
 import org.cqutosp.hydros.ui.components.LocalLiquidGlassEnabled
 import org.cqutosp.hydros.ui.screens.WalletScreen
@@ -438,7 +439,14 @@ class ScreenPreviewActivity : ComponentActivity() {
                         )
                     }
                     "update" -> HydrosPage("软件更新", onBack = {}) {
-                        SoftwareUpdateScreen(updates = previewUpdateState(), onCheck = {})
+                        SoftwareUpdateScreen(updates = previewUpdateState(), onCheck = {},
+                            updateSource = org.cqutosp.hydros.data.update.UpdateSource.GITEE)
+                    }
+                    "updatesource" -> HydrosPage("更新源", onBack = {}) {
+                        UpdateSourceScreen(
+                            selected = org.cqutosp.hydros.data.update.UpdateSource.GITEE,
+                            onSelect = {},
+                        )
                     }
                     "releases" -> HydrosPage("更新历史", onBack = {}) {
                         ReleaseHistoryScreen(

@@ -797,7 +797,13 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                         }
                         composable("about/update-source") {
                             HydrosPage("更新源", onBack = { back() }) {
-                                UpdateSourceScreen(state.updateSource, onSelect = model::updateSource)
+                                UpdateSourceScreen(state.updateSource, onSelect = { source ->
+                                    if (source != state.updateSource) {
+                                        model.updateSource(source)
+                                        appInfo.onSourceChanged()
+                                        snackbar.show("已切换到 " + source.label + "，正在重新获取版本信息")
+                                    }
+                                })
                             }
                         }
                         composable("about/releases") {
@@ -1121,7 +1127,7 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                         scaleX = s
                         scaleY = s
                     }
-                    .shadow((12 + 8 * lift).dp, glassShape)
+                    .shadow((4 + 3 * lift).dp, glassShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.10f))
                     .clip(glassShape)
                     .onSizeChanged { capsuleWidth = it.width.toFloat() }
                     .onGloballyPositioned { capsuleOrigin = it.positionInWindow() }
@@ -1293,7 +1299,7 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                         interactionSource = fabSource,
                         indication = null
                     ) { haptics.light(); onScan() }
-                    .shadow(14.dp, CircleShape)
+                    .shadow(4.dp, CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
                     .clip(CircleShape)
                     .onGloballyPositioned { fabOrigin = it.positionInWindow() }
                     .testTag("scan-action"),

@@ -140,6 +140,16 @@ class AppInfoViewModel(
         }
     }
 
+    /** 更新源切换后：清掉旧源结果，立即用新源重查最新版本与历史列表。 */
+    fun onSourceChanged() {
+        detailJob?.cancel()
+        mutable.value = mutable.value.copy(checking = false, checked = false, release = null, error = null, hasUpdate = false)
+        historyMutable.value = ReleaseHistoryUiState()
+        detailMutable.value = ReleaseHistoryUiState()
+        checkForUpdates()
+        loadHistory(refresh = true)
+    }
+
     fun loadHistory(refresh: Boolean = false) {
         val state = historyMutable.value
         if (state.loading || (!refresh && !state.hasMore)) return
