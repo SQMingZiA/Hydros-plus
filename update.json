@@ -1,0 +1,201 @@
+{
+  "generated_at": "2026-11-21T08:02:59.059Z",
+  "releases": [
+    {
+      "version": "1.3.3",
+      "tag": "v1.3.3",
+      "name": "Hydros+ 1.3.3",
+      "published_at": "2026-11-21T08:02:38Z",
+      "notes": "## Hydros+ 1.3.3\n\n\n\n---\n\n完整对比：https://github.com/SQMingZiA/Hydros-plus/compare/v1.3.2...v1.3.3\n\n> 演示数据模式下的截图与演示数据仅用于功能展示。",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.3.3-release.apk",
+          "size": 16392596,
+          "sha256": "0cbbc8f7b1b8c19dfecae215c64a090f0cf1d93ed58c7d9c161432f536daa4c1"
+        }
+      ]
+    },
+    {
+      "version": "1.3.2",
+      "tag": "v1.3.2",
+      "name": "Hydros+ 1.3.2",
+      "published_at": "2026-11-21T06:57:26Z",
+      "notes": "### Hydros+ 1.3.2 · 2026-11-21\n\n> 更新页完全跟随更新源；有未读消息时首页顶栏提示「收到新消息」；管理账户页重做。\n\n#### 新增\n- **首页「收到新消息」**：有未读校园消息时，首页/钱包顶栏右侧显示提示胶囊（优先于「新版本可用」），点一下直达消息页。\n\n#### 变更\n- **软件更新页跟随更新源**：最新版本、发布日期、更新历史标题、发布页链接与「源代码仓库」都按当前源（Gitee / GitHub）展示，不再固定指向 GitHub。\n- **管理账户页重做**：头像与姓名区、账户资料（脱敏手机号 / 学校 / 学号）、带说明的账户安全行，退出账户放到页尾。\n- **更新公告重写**：两个仓库的历史版本说明统一为「摘要 + 新增/变更/修复 + 下载与对比链接」的结构。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.3.2-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.3.1...v1.3.2\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.3.2-release.apk",
+          "size": 16425432,
+          "sha256": "731129ce249e67bcad8ed393ce2f141ab7e22edf0c6e0fcefaaec2ac953a8c47"
+        }
+      ]
+    },
+    {
+      "version": "1.3.1",
+      "tag": "v1.3.1",
+      "name": "Hydros+ 1.3.1",
+      "published_at": "2026-11-21T06:25:15Z",
+      "notes": "### Hydros+ 1.3.1 · 2026-11-21\n\n> 消息成为底部一级页并支持 HTML 公告；用水量不再标注「预估」；「我的」页两处数字样式统一。\n\n#### 新增\n- **底部导航「消息」**：消息页从二级页升级为与首页/充值/我的并列的一级页，图标右上角有未读红点；「我的」里的「校园消息」仍保留为快捷入口。\n- **HTML 公告适配**：消息正文自动识别纯文本与 HTML，标题、段落、加粗/斜体/下划线等会正常渲染，公告里写死的颜色和字号会被忽略以跟随主题；列表摘要只取纯文字。\n\n#### 变更\n- **消息页重排**：顶部一行显示未读数与「全部已读 / 刷新」，消息行改为标题 + 日期同行、摘要两行，未读加粗并带主色圆点。\n- **用水量不再提示预估**：账单详情、智能用水报告、设备使用页只显示水量数字（如 15.6 L），不再追加「按单价估算 / 含估算」。\n- **「我的」数字样式统一**：「校园消息」的未读条数与「智能用水报告」的本月金额使用同一字号、字重与颜色。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.3.1-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.3.0...v1.3.1\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.3.1-release.apk",
+          "size": 16425432,
+          "sha256": "0584a8a70dd53f27338cae929deb939d9fb946bca2098960d8e05aa76bf459f2"
+        }
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "tag": "v1.3.0",
+      "name": "Hydros+ 1.3.0",
+      "published_at": "2026-11-21T06:04:28Z",
+      "notes": "### Hydros+ 1.3.0 · 2026-11-21\n\n> 移除桌面图标切换与语音助手；首页顶栏新增「新版本可用」入口；新增校园消息；账单、用水报告与使用页展示用水量。\n\n#### 新增\n- **校园消息**：「我的 → 校园服务 → 校园消息」读取校园网关的推送记录，未读会在入口上标出数量；首次同步只建立基线，不会把历史消息全部当成未读。\n- **首页顶栏「新版本可用」**：检测到新版本时，首页/钱包顶栏最右侧出现入口，点一下直接进入软件更新页。\n- **用水量**：账单详情、智能用水报告与设备使用页都会显示用水量；账单里带了实际水量就直接用，没有时按 0.027 元/L 的单价由金额估算，并标注为估算值。\n\n#### 移除\n- **桌面图标切换**：不再提供「默认图标 / 趣智校园」两套启动图标切换，应用只保留默认图标。\n- **语音助手**：移除语音口令相关页面、设置项与 hydros://voice 入口。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.3.0-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.2.2...v1.3.0\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.3.0-release.apk",
+          "size": 16408460,
+          "sha256": "f4877d34c3b6aabc3148c7ed545f030564f67ad20978de44d4d5fb478f6441b2"
+        }
+      ]
+    },
+    {
+      "version": "1.2.2",
+      "tag": "v1.2.2",
+      "name": "Hydros+ 1.2.2",
+      "published_at": "2026-11-21T05:16:37Z",
+      "notes": "### Hydros+ 1.2.2 · 2026-11-21\n\n> 修复新系统（Android 16/17、HyperOS）上桌面图标切不过去的问题；Gitee 与 GitHub 的发行版补齐一致。\n\n#### 修复\n- **桌面图标切换更可靠**：切换时先确认目标别名已被系统接受再关闭另一个别名，避免个别 ROM 上出现「两个入口都关掉、桌面没有图标」；切换后以整包级别重新声明一次应用状态（不杀进程），连续三轮刷新 PackageManager / 桌面列表 / 快捷方式缓存，解决高版本系统与厂商桌面只认缓存、不刷新图标的问题；切换结果会明确提示，失败时可直接改用「添加到桌面」。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.2.2-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.2.1...v1.2.2\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.2.2-release.apk",
+          "size": 16544177,
+          "sha256": "69cd23b867eaf08a650346b41af17cc59000cc7692dee608087ddfcafb4c5898"
+        }
+      ]
+    },
+    {
+      "version": "1.2.1",
+      "tag": "v1.2.1",
+      "name": "Hydros+ 1.2.1",
+      "published_at": "2026-11-21T03:37:50Z",
+      "notes": "### Hydros+ 1.2.1 · 2026-11-21\n\n> 底栏再简化：投影收小、去掉多余高光与色散；切换更新源后版本信息立即按新源刷新。\n\n#### 变更\n- **底部导航更干净**：投影从 12–20dp 收到 4–7dp 并降低黑色浓度；玻璃只保留一层白霜与一条细描边，去掉上缘亮线、左冷右暖的色散边、斜向反光、底部压暗与药丸弧光；扫码球同样只留品牌渐变与细边。\n- **切换更新源后自动刷新**：在「更新源」页选中另一个源后，会清掉旧源的版本与历史列表，立即用新源重查最新版本并重新加载更新历史，同时提示切换结果。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.2.1-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.2.0...v1.2.1\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.2.1-release.apk",
+          "size": 16544177,
+          "sha256": "bcff35bac6b7892928be4770ccf987435ad7f939242d334039b7ea47cdb3275e"
+        }
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "tag": "v1.2.0",
+      "name": "Hydros+ 1.2.0",
+      "published_at": "2026-11-21T03:26:34Z",
+      "notes": "### Hydros+ 1.2.0 · 2026-11-21\n\n> 底栏玻璃去掉采样噪点；更新源默认 Gitee，并可在「软件更新 → 更多信息 → 更新源」里切换。\n\n#### 变更\n- **更新源默认 Gitee**（gitee.com/sqmingzia/Hydros-plus）：Gitee 由作者从 GitHub 自动同步，国内访问更稳定；Gitee 没有可用版本时自动回退 GitHub。\n- **新增「更新源」切换页**：软件更新页「更多信息」里新增入口，可在 Gitee 与 GitHub 之间选择，选择后立即生效并本地记住。\n- **底部导航玻璃去掉噪点**：不再采样屏幕位图（放大后会出现颗粒纹理、残影，也能读出底下的文字），改为纯绘制的高光、色散边与内阴影叠层，磨砂玻璃质感稳定且不可透视。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.2.0-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.1.9...v1.2.0\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.2.0-release.apk",
+          "size": 16544177,
+          "sha256": "3f27211aa1a51a5fad3a8b375a133cf16feb75a0002c6b27d4eac9cea2ec77e3"
+        }
+      ]
+    },
+    {
+      "version": "1.1.9",
+      "tag": "v1.1.9",
+      "name": "Hydros+ 1.1.9",
+      "published_at": "2026-11-21T03:10:25Z",
+      "notes": "### Hydros+ 1.1.9 · 2026-11-21\n\n> 底栏重做成真正的液态玻璃：采样页面像素后自己算模糊与折射；更新检查改回 GitHub 优先。\n\n#### 变更\n- **更新检查改回 GitHub 优先**（github.com/SQMingZiA/Hydros-plus）：正式仓库与 Releases 都在 GitHub，Gitee 仅作同步镜像，GitHub 不可用时才回退 Gitee。\n- **底部导航图标不再拉伸**：选中态只换实心图标与主色，取消原来的横向压扁 / 纵向拉长与放大，避免图标变形。\n\n#### 修复\n- **液态玻璃只有一层白底**：之前用 RenderEffect 做背景模糊，在部分设备与模拟器上会被静默丢弃，看起来就是一块白卡片。现在每 600ms 把整屏内容降采样成一张磨砂底图，底栏与扫码球分别按自己的形状裁切、放大（药丸 1.35×、扫码球 1.28×）后重绘，再叠染色、上缘镜面高光、色散边纹与下缘内阴影——不依赖 RenderEffect 与 AGSL，API 31 也能看到真实的透光与折射。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.1.9-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.1.8...v1.1.9\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.1.9-release.apk",
+          "size": 16544177,
+          "sha256": "63b7e3a81a235e0c38272f91ab1f45127bd5604aee34d239ead15040ba5263bd"
+        }
+      ]
+    },
+    {
+      "version": "1.1.7",
+      "tag": "v1.1.7",
+      "name": "Hydros+ 1.1.7",
+      "published_at": "2026-11-21T02:08:28Z",
+      "notes": "### Hydros+ 1.1.7 · 2026-11-21\n\n> 玻璃续作：标题区不再发暗，导航让开系统手势条，长按导航可以拖着换页。\n\n#### 修复\n- **部分设备标题区发暗**：以前背景只画在内容区，状态栏与标题落在窗口底色上，深色系统主题下会整块变暗、渐变也断掉。现在整屏只画一份背景，状态栏、标题、内容共享同一块渐变。\n- **底部导航压住系统手势条**：导航胶囊与扫码球整体上移，除窗口 inset 外再留 18dp 安全距离。\n\n#### 新增\n- **长按拖动切换**：按住底部玻璃胶囊左右拖动，选中内胆跟手移动并逐格震动反馈，松手切到目标页；拖动时胶囊轻微抬起放大。\n- **按钮液态反馈**：tab 按下时接触点扩散一圈柔光并回弹，扫码球按下缩放并浮出一层高光。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.1.7-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.1.6...v1.1.7\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.1.7-release.apk",
+          "size": 16527793,
+          "sha256": "8b7d6bdacc84ab329be0310e1e0c0342ca28f0df22f0c2384d794fa60d07be9c"
+        }
+      ]
+    },
+    {
+      "version": "1.1.6",
+      "tag": "v1.1.6",
+      "name": "Hydros+ 1.1.6",
+      "published_at": "2026-11-21T01:53:42Z",
+      "notes": "### Hydros+ 1.1.6 · 2026-11-21\n\n> 玻璃版本：底部导航真正「看到」页面内容，主题色入口也终于指向主题色。\n\n#### 修复\n- **主题色设置不生效**：应用外观里的「主题色」原本指向渐变背景页，改成打开真正的主题色选择（预设色板 + 自定义色值），全站品牌色、按钮、选中态随设置立即变化；渐变背景单独成行。\n\n#### 变更\n- **底部导航与扫码球改为真实液态玻璃**：页面内容被实时录进采样层，导航胶囊对其做模糊、磨砂染色、上缘镜面高光、下缘内阴影与玻璃描边；扫码球用品牌色径向渐变 + 左上环境反射弧。只有当前 tab 有玻璃内胆，切换为弹簧动画。\n- 首页无收藏设备时不再渲染「还没有收藏设备」占位卡，直接不显示该分组。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.1.6-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.1.5...v1.1.6\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.1.6-release.apk",
+          "size": 16527793,
+          "sha256": "7fd2d6d92eee50db8eb29130c3892d1a143573f7f4a494989620488fc71adee7"
+        }
+      ]
+    },
+    {
+      "version": "1.1.5",
+      "tag": "v1.1.5",
+      "name": "Hydros+ 1.1.5",
+      "published_at": "2026-11-21T00:58:42Z",
+      "notes": "### Hydros+ 1.1.5 · 2026-11-21\n\n> 稳定与手感版本：不再莫名其妙退出登录，收藏真的会留在首页，苹方对中文也生效了。\n\n#### 修复\n- **登录状态偶尔丢失**：以前只要网关返回的文案撞上「登录」相关关键词（或 401/403），应用就会立刻把本地凭证清掉。现在先向网关二次确认：确认失效才退出；确认仍有效或网络异常都保留登录，并且同一份凭证只确认一次。凭证改为「系统密钥库 + 签名派生密钥」双写，密钥库失效时还能从后备密文自愈恢复。\n- **设备页收藏不起作用**：以前只有「最近连接」过的设备才能收藏，且首页只展示「最近连接 ∩ 收藏」，所以详情页点了收藏也看不到。现在任意设备都能收藏，收藏即进入首页「我的设备」，没收藏时首页显示引导行。\n- **苹方字体只对数字生效**：Compose 的字体族不会逐字形回退，原来把 SF Pro 和苹方放在同一字重里，中文只能走系统兜底。现在改为纯苹方家族，中文、数字、拉丁统一苹方。\n- 启动时若凭证密文存在但解不开，不再静默变成未登录，改为保留账户信息并给出重新登录入口。\n\n#### 变更\n- **绑定寝室流程重做**：已绑定只看信息卡（可重新绑定 / 解除绑定）；未绑定时自动扫描，点设备列表只是「选中」，选中后才展开寝室号与备注，底部只有一个主按钮并写明为什么不能点。手动输入 MAC 收进折叠项。\n- **底部导航与扫码按钮换成液态玻璃**：导航胶囊先采样页面渐变光斑再模糊，叠高光、内阴影与玻璃描边；扫码球加了径向渐变与左上环境反射弧。只有选中的 tab 才有玻璃内胆。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.1.5-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.1.4...v1.1.5\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.1.5-release.apk",
+          "size": 16511409,
+          "sha256": "e5e19a971595c7c4c8f1880375171d03c713cfb6e1cf295e5bff871ad4d21ace"
+        }
+      ]
+    },
+    {
+      "version": "1.1.4",
+      "tag": "v1.1.4",
+      "name": "Hydros+ 1.1.4",
+      "published_at": "2026-11-20T14:00:52Z",
+      "notes": "### Hydros+ 1.1.4 · 2026-11-20\n\n> 更顺手的版本：点击有反馈、文案更像人话，图标和数据也终于跟得上你换设备。\n\n#### 新增\n- **字体粗细调节**：显示设置新增「字体粗细」，细 / 标准 / 较粗 / 粗 四档，全站字体同步变化。\n- **桌面图标「添加到桌面」**：部分桌面不会自动刷新图标时，可用当前图标新建一个独立入口。\n\n#### 修复\n- **桌面图标在部分设备切换后不生效**：两套图标同时补齐传统位图与自适应图标（前景按 108dp 安全区出图），切换后主动唤醒桌面图标缓存。\n- **升级后头像消失**：头像改为固定文件名保存，并兼容旧版本留下的绝对路径与 content URI 两种记录，升级不再丢头像。\n- 首页「用户名，今天用了 0 次水」措辞别扭，改为「下午好，王小明」+「今天还没有用水」。\n\n#### 变更\n- 本月用水在有额度时显示为「¥7.11 / ¥10.00」，一眼看出还剩多少。\n- 结算后默认跳转到账单详情页（可在显示设置改回设备页）。\n- 全应用统一按压反馈：行、卡片、按钮按下有轻微缩放与透明度变化，跳转类点击不再只剩水波纹。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.1.4-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.1.3...v1.1.4\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.1.4-release.apk",
+          "size": 16735733,
+          "sha256": "7a8d5b5b558461a815aba6e57ba67d141eeec6277291ecdbecb43eb5c6316ec1"
+        }
+      ]
+    },
+    {
+      "version": "1.1.3",
+      "tag": "v1.1.3",
+      "name": "Hydros+ 1.1.3",
+      "published_at": "2026-11-20T13:16:55Z",
+      "notes": "### Hydros+ 1.1.3 · 2026-11-20\n\n> 桌面图标这一栏回归简单：只有两个选择，且趣智图标终于显示成它自己的样子。\n\n#### 修复\n- **趣智校园图标显示为绿色占位图**：该入口原本使用自适应图标（adaptive-icon），前景是一张 nodpi 位图，桌面解析失败后回退到系统占位图标。改为按 5 档密度导出的传统 PNG（红色底 + 白色「趣智」标），桌面可正常显示。\n\n#### 变更\n- 桌面图标页精简为「默认图标 / 趣智校园」两项，去掉每项下方的灰色副标题。\n\n#### 移除\n- 自定义桌面图标（从相册选图 + 桌面快捷方式）功能，以及随之不再需要的 mipmap/drawable/color 资源与 `.CustomIcon` activity-alias。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.1.3-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.1.2...v1.1.3\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.1.3-release.apk",
+          "size": 16605632,
+          "sha256": "566b8bbe05ba48f89247dae0e5fc6578c3393b58856b810a796a8331540094a9"
+        }
+      ]
+    },
+    {
+      "version": "1.1.2",
+      "tag": "v1.1.2",
+      "name": "Hydros+ 1.1.2",
+      "published_at": "2026-11-20T12:36:19Z",
+      "notes": "### Hydros+ 1.1.2 · 2026-11-20\n\n> 一个「用起来不别扭」的收尾版本：按钮形态统一、升级不再掉登录态。\n\n#### 新增\n- 登录页自动回填上次登录的手机号，换设备/重装后少打一次号码。\n\n#### 修复\n- **升级后必须重新登录**：改用项目内固定签名密钥（`keystore/hydros-release.jks`），release 包可直接覆盖安装，不再因签名不一致被迫卸载而清空数据。\n- 读取登录凭证失败时不再清除本地 token，仅降级为未登录并保留上次账号。\n- 设备使用页「返回首页」无效：改为先结束会话态再回退到首页，账单详情同样生效。\n\n#### 变更\n- 「长按以开始使用」按钮由胶囊改为 **8dp 圆角 / 48dp 高**，与全站主按钮一致，长按进度时圆角平滑收拢。\n- 设备使用页整屏改为按钮同色纯蓝，移除渐变与光斑；信息面板 16dp → 12dp 圆角，底部按钮统一 8dp。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.1.2-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.1.1...v1.1.2\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.1.2-release.apk",
+          "size": 16578244,
+          "sha256": "b50a15afa2ba533de7a19cc251f9cc51e1b30f17af0d9de5a4c7f7d1d94f0272"
+        }
+      ]
+    }
+  ]
+}
