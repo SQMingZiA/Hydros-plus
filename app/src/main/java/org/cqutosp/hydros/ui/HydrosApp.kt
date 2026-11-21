@@ -647,9 +647,15 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 AppIconScreen(
                                     current = iconKey,
                                     onSelect = { key ->
-                                        AppIconController.apply(context, key)
+                                        val applied = AppIconController.apply(context, key)
                                         iconKey = AppIconController.currentAppIcon(context)
-                                        snackbar.show("已切换桌面图标，部分桌面需要重启应用后才刷新")
+                                        snackbar.show(
+                                            if (applied) {
+                                                "已切换桌面图标；桌面没刷新时可用「添加到桌面」新建入口"
+                                            } else {
+                                                "切换失败，请重试；仍不行可用「添加到桌面」新建入口"
+                                            }
+                                        )
                                     },
                                 )
                             }

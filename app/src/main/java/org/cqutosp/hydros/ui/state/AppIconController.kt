@@ -10,6 +10,7 @@ import android.os.Process
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.cqutosp.hydros.data.storage.AppIconKeys
 import org.cqutosp.hydros.data.storage.AppIconStore
@@ -38,23 +39,52 @@ object AppIconController {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** 立即应用图标键：切换别名 enabled 状态，唤醒桌面缓存，并异步落盘。 */
-    fun apply(context: Context, key: String) {
+    /**
+     * 立即应用图标键：切换别名 enabled 状态，唤醒桌面缓存，并异步落盘。
+     *
+     * 顺序很重要：先把目标别名打开并确认 PackageManager 已经接受，再去关旧别名；
+     * 否则在部分 ROM（HyperOS / Android 16+）上一次失败的 setComponentEnabledSetting
+     * 会留下“两个都关掉”的状态，桌面上直接没有图标。
+     *
+     * @return 目标别名是否确实处于启用状态
+     */
+    fun apply(context: Context, key: String): Boolean {
         val app = context.applicationContext
         val normalized = AppIconKeys.normalize(key)
         val target = AppIconAliases.forKey(normalized)
-        // 先启用目标别名，再禁用另一个：中途异常也不会出现“没有任何桌面入口”的状态。
         setEnabled(app, target, true)
+        if (!isAliasEnabled(app, target)) {
+            HydrosLog.log("icon", "启用桌面别名失败：" + target)
+            return false
+        }
         AppIconAliases.all.forEach { alias ->
             if (alias != target) {
                 setEnabled(app, alias, false)
             }
         }
-        wakeLauncherCaches(app, target)
+        // 落盘要早于刷新：某些桌面会重新查询 PackageManager 时顺带读到我们的偏好。
+        scope.launch { runCatching { AppIconStore(app).icon(normalized) } }
+        refreshLauncher(app, target)
+        // 厂商桌面大多是异步刷新：立刻刷新一次后，再补两轮延迟刷新。
         scope.launch {
-            runCatching { AppIconStore(app).icon(normalized) }
+            // 再设置一次同样的状态：会产生新的组件变更回调，专门对付只听回调不看状态的桌面。
+            delay(600)
+            setEnabled(app, target, true)
+            refreshLauncher(app, target)
+            delay(1400)
+            refreshLauncher(app, target)
         }
+        HydrosLog.log("icon", "桌面图标切换为 " + normalized)
+        return true
     }
+
+    private fun isAliasEnabled(context: Context, alias: String): Boolean = runCatching {
+        val info = context.packageManager.getActivityInfo(
+            ComponentName(context.packageName, alias),
+            PackageManager.MATCH_DISABLED_COMPONENTS,
+        )
+        info.enabled
+    }.getOrDefault(false)
 
     /** 读取当前生效的图标键：先看别名状态，再回落到本地偏好。 */
     fun currentAppIcon(context: Context): String {
@@ -88,15 +118,25 @@ object AppIconController {
     /**
      * 别名的 enabled 状态变化后，通知系统与启动器重新读取组件信息。
      *
-     * 部分厂商桌面只在收到包/图标相关回调时才刷新缓存，光切别名会继续显示旧图标。
-     * 这里依次做几件“读一次即触发刷新”的廉价操作，全部包在 runCatching 里，失败也不影响切换结果：
-     * 1. 读一次目标别名的 ActivityInfo，确保 PackageManager 缓存中的组件信息是新的；
-     * 2. 查询一次桌面 Intent，让系统桌面列表缓存更新；
-     * 3. 通过 LauncherApps 拉一次本应用的桌面入口列表（部分桌面监听这次调用刷新图标）；
-     * 4. 刷新已固定的快捷方式，避免快捷方式仍显示旧图标。
+     * 部分厂商桌面（尤其 HyperOS / Android 16+）只在收到整包级回调时才刷新图标缓存，
+     * 单纯切别名会继续显示旧图标。这里依次做几件“读一次即触发刷新”的廉价操作，
+     * 全部包在 runCatching 里，失败也不影响切换结果：
+     * 1. 以 ENABLED 状态重设一次应用本身（不杀进程）：会发出整包 CHANGED 回调，
+     *    这是各家桌面最常监听的刷新信号，也是别名切换后最常见的一步；
+     * 2. 读一次目标别名的 ActivityInfo，确保 PackageManager 缓存中的组件信息是新的；
+     * 3. 查询一次桌面 Intent，让系统桌面列表缓存更新；
+     * 4. 通过 LauncherApps 拉一次本应用的桌面入口列表（部分桌面监听这次调用刷新图标）；
+     * 5. 刷新已固定的快捷方式，避免快捷方式仍显示旧图标。
      */
-    private fun wakeLauncherCaches(context: Context, alias: String) {
+    private fun refreshLauncher(context: Context, alias: String) {
         val packageName = context.packageName
+        runCatching {
+            context.packageManager.setApplicationEnabledSetting(
+                packageName,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP,
+            )
+        }
         val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             setPackage(packageName)
