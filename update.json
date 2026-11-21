@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-11-21T08:02:59.059Z",
+  "generated_at": "2026-11-21T08:03:39.783Z",
   "releases": [
     {
       "version": "1.3.3",
       "tag": "v1.3.3",
       "name": "Hydros+ 1.3.3",
       "published_at": "2026-11-21T08:02:38Z",
-      "notes": "## Hydros+ 1.3.3\n\n\n\n---\n\n完整对比：https://github.com/SQMingZiA/Hydros-plus/compare/v1.3.2...v1.3.3\n\n> 演示数据模式下的截图与演示数据仅用于功能展示。",
+      "notes": "### Hydros+ 1.3.3 · 2026-11-21\n\n> 修复「检查更新未完成，服务暂时无法处理」；用水限额升级为独立页面并支持超额禁止用水；去掉列表行的悬停灰与首页/钱包标签的灰色反馈。\n\n#### 新增\n- **用水限额独立页**：原弹窗改成二级页，可查看本月支出、使用次数与当前限额进度，输入金额保存或取消限额。\n- **达到限额后禁止使用**：开启后，本月支出达到限额时无法开始新的用水，会提示「已禁止开始新的用水」；可在同一页面调整限额或关闭限制。\n\n#### 修复\n- **更新检查不再被限流**：Gitee 与 GitHub 的匿名 releases API 有很低的调用额度，被限流时会直接报错。现在优先读取仓库根目录的 `update.json`（无额度限制），API 仅在索引不可用时兜底，两个源互为备份。\n- **更新历史更完整**：索引里包含全部已发布版本，历史页翻页不再受单次 API 返回条数影响。\n- **首页/钱包标签的悬停灰**：顶部两个标签不再有默认水波纹与灰色悬浮底，只保留选中指示条。\n- **列表行的悬停底色**：设置、消息、账单等长条行的按下/悬停填充改为整行通栏，不再只在内容宽度里留一块灰。\n\n#### 变更\n- 更新源与版本信息仍跟随「软件更新 → 更新源」的选择，下载地址按所选源拼装。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.3.3-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.3.2...v1.3.3\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
       "assets": [
         {
           "name": "Hydros-plus-1.3.3-release.apk",
