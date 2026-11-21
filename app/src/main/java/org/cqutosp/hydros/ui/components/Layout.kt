@@ -506,18 +506,35 @@ fun HydrosPage(
     val backdropLayer = rememberGraphicsLayer()
     SideEffect { backdrop.layer = backdropLayer }
     Box(Modifier.fillMaxSize()) {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(if (background != null || hasWallpaper) Color.Transparent else MaterialTheme.colorScheme.background)
-                        .statusBarsPadding()
-                        .padding(horizontal = 20.dp)
-                        .padding(top = 10.dp, bottom = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+        CompositionLocalProvider(
+            LocalLiquidBackdrop provides backdrop,
+            LocalLiquidGlassInset provides 84.dp
+        ) {
+            // 整屏只画一份背景：状态栏、标题、内容都在同一块渐变上，
+            // 不会出现“标题区没有背景、透出系统窗口底色而发暗”的问题。
+            Box(
+                Modifier.fillMaxSize()
+                    .liquidBackdropOrigin(backdrop)
+                    .liquidBackdropSource(backdrop)
+            ) {
+                when {
+                    background != null -> background()
+                    hasWallpaper -> WallpaperBackdrop(
+                        path = wallpaper?.path,
+                        dim = wallpaper?.dim ?: 0f,
+                        blur = wallpaper?.blur ?: 0f,
+                    )
+                    else -> LiquidBackground()
+                }
+                Column(Modifier.fillMaxSize()) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 10.dp, bottom = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                     if (header != null) header()
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
@@ -549,39 +566,12 @@ fun HydrosPage(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            },
-            bottomBar = {}
-        ) { padding ->
-            // 内容铺到屏幕底部（导航玻璃悬浮其上），方便玻璃实时采样到内容。
-            Box(
-                Modifier.fillMaxSize()
-                    .padding(top = padding.calculateTopPadding())
-                    .consumeWindowInsets(padding)
-            ) {
-                CompositionLocalProvider(
-                    LocalLiquidBackdrop provides backdrop,
-                    LocalLiquidGlassInset provides 84.dp
-                ) {
-                    Box(
-                        Modifier.fillMaxSize()
-                            .liquidBackdropOrigin(backdrop)
-                            .liquidBackdropSource(backdrop)
-                    ) {
-                        when {
-                            background != null -> background()
-                            hasWallpaper -> WallpaperBackdrop(
-                                path = wallpaper?.path,
-                                dim = wallpaper?.dim ?: 0f,
-                                blur = wallpaper?.blur ?: 0f,
-                            )
-                            else -> LiquidBackground()
-                        }
-                        content()
                     }
-                    Box(Modifier.align(Alignment.BottomCenter)) { bottomBar() }
+                    // 内容铺到屏幕底部（导航玻璃悬浮其上），方便玻璃实时采样到内容。
+                    Box(Modifier.weight(1f).fillMaxWidth()) { content() }
                 }
             }
+            Box(Modifier.align(Alignment.BottomCenter)) { bottomBar() }
         }
     }
 }

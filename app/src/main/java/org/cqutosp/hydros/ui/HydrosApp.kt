@@ -23,6 +23,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.compositeOver
@@ -1066,22 +1067,76 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
     val brand = colors.primary
     val fabStart = lerp(brand, Color.White, if (dark) 0.16f else 0.34f)
     val fabEnd = lerp(brand, Color(0xFF6C4CF6), 0.45f)
+    // iOS 液态玻璃的拖动切换：长按后按住胶囊左右拖动，松手切到目标页。
+    var capsuleWidth by remember { mutableStateOf(0f) }
+    var dragX by remember { mutableStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragIndex by remember { mutableStateOf(-1) }
+    val capsuleLift by animateFloatAsState(
+        targetValue = if (dragging) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 520f),
+        label = "glass-lift"
+    )
+    val activeIndex = if (dragging && dragIndex >= 0) dragIndex else destinations.indexOfFirst { it.route == route }
     Box(
         Modifier.fillMaxWidth()
             .onSizeChanged { onHeight(it.height + with(density) { 12.dp.roundToPx() }) }
             .testTag("main-bottom-bar")
     ) {
         Row(
+            // 给手势条/三键导航留出安全距离，避免玻璃胶囊压住系统的滑动条。
             Modifier.fillMaxWidth().navigationBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
                 Modifier.weight(1f).height(barHeight)
+                    .graphicsLayer {
+                        val s = 1f + 0.018f * capsuleLift
+                        scaleX = s
+                        scaleY = s
+                    }
                     .shadow(16.dp, glassShape)
                     .clip(glassShape)
+                    .onSizeChanged { capsuleWidth = it.width.toFloat() }
                     .onGloballyPositioned { capsuleOrigin = it.positionInWindow() }
+                    .pointerInput(destinations) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { offset ->
+                                dragX = offset.x
+                                dragging = true
+                                dragIndex = (offset.x / capsuleWidth.coerceAtLeast(1f) * destinations.size)
+                                    .toInt().coerceIn(0, destinations.lastIndex)
+                                haptics.medium()
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                dragX += amount.x
+                                val next = (dragX / capsuleWidth.coerceAtLeast(1f) * destinations.size)
+                                    .toInt().coerceIn(0, destinations.lastIndex)
+                                if (next != dragIndex) {
+                                    dragIndex = next
+                                    haptics.light()
+                                }
+                            },
+                            onDragEnd = {
+                                val target = dragIndex
+                                dragging = false
+                                dragIndex = -1
+                                if (target >= 0 && target <= destinations.lastIndex &&
+                                    destinations[target].route != route
+                                ) {
+                                    haptics.medium()
+                                    onNavigate(destinations[target].route)
+                                }
+                            },
+                            onDragCancel = {
+                                dragging = false
+                                dragIndex = -1
+                            }
+                        )
+                    }
             ) {
                 // 真实液态玻璃：先把页面内容录进采样层，再对“只画采样层”的盒子做 blur，
                 // 最后叠一层不模糊的染色/高光，得到 iOS 那种被磨砂过的透光玻璃。
@@ -1105,8 +1160,15 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                     )
                 }
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                    destinations.forEach { destination ->
-                        val selected = route == destination.route
+                    destinations.forEachIndexed { index, destination ->
+                        val selected = activeIndex == index
+                        val pressSource = remember { MutableInteractionSource() }
+                        val pressed by pressSource.collectIsPressedAsState()
+                        val pressGlow by animateFloatAsState(
+                            targetValue = if (pressed || (dragging && dragIndex == index)) 1f else 0f,
+                            animationSpec = spring(dampingRatio = 0.7f, stiffness = 700f),
+                            label = "tab-press-" + destination.route
+                        )
                         val scale by animateFloatAsState(
                             targetValue = if (selected) 1f else 0f,
                             animationSpec = spring(dampingRatio = 0.52f, stiffness = 360f),
@@ -1141,6 +1203,21 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                                             RoundedCornerShape(999.dp)
                                         )
                                 )
+                                // 按下的“液态”反馈：接触点扩散一圈柔光，松手回弹。
+                                Box(
+                                    Modifier
+                                        .matchParentSize()
+                                        .graphicsLayer { alpha = pressGlow * 0.55f }
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(
+                                            Brush.radialGradient(
+                                                listOf(
+                                                    Color.White.copy(alpha = if (dark) 0.26f else 0.55f),
+                                                    Color.Transparent
+                                                )
+                                            )
+                                        )
+                                )
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Glyph(
                                         if (selected) destination.icon else destination.iconOutline,
@@ -1159,18 +1236,39 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                             Box(
                                 Modifier.matchParentSize().clip(RoundedCornerShape(999.dp)).selectable(
                                     selected = selected,
+                                    interactionSource = pressSource,
+                                    indication = null,
                                     role = Role.Tab,
-                                    onClick = { if (!selected) { haptics.medium(); onNavigate(destination.route) } }
+                                    onClick = { if (route != destination.route) { haptics.medium(); onNavigate(destination.route) } }
                                 )
                             )
                         }
                     }
                 }
             }
+            val fabSource = remember { MutableInteractionSource() }
+            val fabPressed by fabSource.collectIsPressedAsState()
+            val fabScale by animateFloatAsState(
+                targetValue = if (fabPressed) 0.93f else 1f,
+                animationSpec = spring(dampingRatio = 0.55f, stiffness = 900f),
+                label = "fab-press"
+            )
+            val fabGlow by animateFloatAsState(
+                targetValue = if (fabPressed) 1f else 0f,
+                animationSpec = spring(dampingRatio = 0.7f, stiffness = 800f),
+                label = "fab-glow"
+            )
             Box(
                 Modifier
                     .size(56.dp)
-                    .hydrosPressable(pressedScale = 0.94f) { haptics.light(); onScan() }
+                    .graphicsLayer {
+                        scaleX = fabScale
+                        scaleY = fabScale
+                    }
+                    .clickable(
+                        interactionSource = fabSource,
+                        indication = null
+                    ) { haptics.light(); onScan() }
                     .shadow(14.dp, CircleShape)
                     .clip(CircleShape)
                     .onGloballyPositioned { fabOrigin = it.positionInWindow() }
@@ -1195,6 +1293,17 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                         dark = dark
                     )
                 }
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .graphicsLayer { alpha = fabGlow * 0.5f }
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(Color.White.copy(alpha = 0.6f), Color.Transparent)
+                            )
+                        )
+                )
                 Glyph(R.drawable.ic_scan, modifier = Modifier.size(24.dp), tint = Color.White, description = "扫码")
             }
         }
