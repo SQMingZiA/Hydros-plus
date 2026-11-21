@@ -86,6 +86,8 @@ object DemoData {
                 orderNo = "demo-" + (1000 + index),
                 durationText = if (shower) (8 + index % 9).toString() + "分钟" else null,
                 recharge = false,
+                // 演示数据给真实用水量，报告页/详情页就能显示「实测」而不是估算。
+                waterMilliLiters = if (shower) 52000L + (index % 5) * 9000L else 6800L + (index % 4) * 1200L,
             )
         }.sortedByDescending { it.time }
     }

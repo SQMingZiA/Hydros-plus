@@ -37,8 +37,10 @@ data class AppRelease(
     val version: String, val tag: String, val notes: String,
     val name: String = "v$version", val publishedAt: String? = null,
     val assets: List<ReleaseAsset> = emptyList(),
+    val source: UpdateSource = UpdateSource.GITHUB,
 ) {
-    val url: String get() = "$HYDROS_RELEASES/tag/${URLEncoder.encode(tag, "UTF-8").replace("+", "%20")}"
+    /** 发布页地址按来源生成，Gitee 的版本不会链到 GitHub。 */
+    val url: String get() = source.releaseUrl(tag)
 }
 
 data class ReleasePage(val releases: List<AppRelease>, val hasMore: Boolean)
@@ -55,18 +57,18 @@ class GitHubAppUpdates(
     private val endpoint: String = "https://api.github.com/repos/$HYDROS_GITHUB_REPO/releases/latest",
 ) : AppUpdateSource {
     override suspend fun latest(): AppRelease? = withContext(Dispatchers.IO) {
-        request(endpoint, allowMissing = true)?.let { parseUpdateData { parseRelease(it.jsonObject) } }
+        request(endpoint, allowMissing = true)?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITHUB) } }
     }
 
     override suspend fun history(page: Int): ReleasePage = withContext(Dispatchers.IO) {
         require(page > 0)
         val entries = parseUpdateData { request("${endpoint.removeSuffix("/latest")}?per_page=30&page=$page")!!.jsonArray }
-        ReleasePage(entries.mapNotNull { parseUpdateData { parseRelease(it.jsonObject) } }, entries.size == 30)
+        ReleasePage(entries.mapNotNull { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITHUB) } }, entries.size == 30)
     }
 
     override suspend fun release(tag: String): AppRelease? = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(tag, "UTF-8").replace("+", "%20")
-        request("${endpoint.removeSuffix("/latest")}/tags/$encoded", allowMissing = true)?.let { parseUpdateData { parseRelease(it.jsonObject) } }
+        request("${endpoint.removeSuffix("/latest")}/tags/$encoded", allowMissing = true)?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITHUB) } }
     }
 
     private suspend fun request(url: String, allowMissing: Boolean = false): JsonElement? = retryReadQuery { budget ->
@@ -116,7 +118,7 @@ class GiteeAppUpdates(
 ) : AppUpdateSource {
     override suspend fun latest(): AppRelease? = withContext(Dispatchers.IO) {
         request("$apiBase/releases/latest", allowMissing = true)
-            ?.let { parseUpdateData { parseRelease(it.jsonObject) } }
+            ?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITEE) } }
             ?: history(1).releases.firstOrNull()
     }
 
@@ -125,13 +127,13 @@ class GiteeAppUpdates(
         val entries = parseUpdateData {
             request("$apiBase/releases?per_page=30&page=$page&direction=desc")?.jsonArray
         } ?: JsonArray(emptyList())
-        ReleasePage(entries.mapNotNull { parseUpdateData { parseRelease(it.jsonObject) } }, entries.size == 30)
+        ReleasePage(entries.mapNotNull { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITEE) } }, entries.size == 30)
     }
 
     override suspend fun release(tag: String): AppRelease? = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(tag, "UTF-8").replace("+", "%20")
         request("$apiBase/releases/tags/$encoded", allowMissing = true)
-            ?.let { parseUpdateData { parseRelease(it.jsonObject) } }
+            ?.let { parseUpdateData { parseRelease(it.jsonObject, UpdateSource.GITEE) } }
     }
 
     private suspend fun request(url: String, allowMissing: Boolean = false): JsonElement? = retryReadQuery { budget ->
@@ -210,7 +212,7 @@ private inline fun <T> parseUpdateData(block: () -> T): T = try { block() }
 catch (error: AppFailure) { throw error }
 catch (error: IllegalArgumentException) { throw AppFailure(FailureOperation.UPDATE, FailureStage.RESPONSE, FailureReason.INVALID_DATA, error) }
 
-internal fun parseRelease(json: JsonObject): AppRelease? {
+internal fun parseRelease(json: JsonObject, source: UpdateSource = UpdateSource.GITHUB): AppRelease? {
     if (json["draft"]?.jsonPrimitive?.booleanOrNull == true ||
         json["prerelease"]?.jsonPrimitive?.booleanOrNull == true) return null
     val tag = json["tag_name"]?.jsonPrimitive?.contentOrNull ?: throw AppFailure(FailureOperation.UPDATE, FailureStage.RESPONSE, FailureReason.INVALID_DATA)
@@ -227,7 +229,7 @@ internal fun parseRelease(json: JsonObject): AppRelease? {
     }
     return AppRelease(version, tag, json["body"]?.jsonPrimitive?.contentOrNull.orEmpty(),
         json["name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: tag,
-        json["published_at"]?.jsonPrimitive?.contentOrNull, assets)
+        json["published_at"]?.jsonPrimitive?.contentOrNull, assets, source)
 }
 
 /** Prefer a matching split, then an explicitly universal or sole unqualified APK. */

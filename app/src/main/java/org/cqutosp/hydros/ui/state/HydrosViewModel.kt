@@ -7,6 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import org.cqutosp.hydros.data.HydrosDependencies
 import org.cqutosp.hydros.data.network.*
+import org.cqutosp.hydros.data.messages.CampusMessage
+import org.cqutosp.hydros.data.messages.MessageReceipts
+import org.cqutosp.hydros.data.messages.RealMessageRepository
 import org.cqutosp.hydros.data.repository.ReauthenticationNotice
 import org.cqutosp.hydros.data.update.UpdateSource
 import org.cqutosp.hydros.data.update.UpdateSourceSetting
@@ -45,14 +48,24 @@ data class HydrosUiState(val initializing: Boolean = true, val signedIn: Boolean
     val walletError: String? = null, val billsError: String? = null, val message: String? = null, val working: Boolean = false,
     val postSessionDestination: PostSessionDestination = PostSessionDestination.BILL,
     val resolvingPostSessionDestination: Boolean = false, val postSessionBillId: String? = null,
-    val demoMode: Boolean = false, val voiceAssistantEnabled: Boolean = false, val liquidGlass: Boolean = true,
+    val demoMode: Boolean = false, val liquidGlass: Boolean = true,
     val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null,
     val wallpaperDim: Float = 0f, val wallpaperBlur: Float = 0f,
     /** 上次登录的账号（脱敏前的手机号），用于登录页回填，避免升级/重新登录时还要手打账号。 */
     val lastAccount: String? = null,
     /** 用户选的更新源（默认 Gitee 镜像）。 */
-    val updateSource: UpdateSource = UpdateSource.GITEE)
+    val updateSource: UpdateSource = UpdateSource.GITEE,
+    /** 校园消息（网关推送）：列表、加载态与已读回执。 */
+    val messages: List<CampusMessage> = emptyList(), val messagesLoading: Boolean = false,
+    val messagesLoaded: Boolean = false, val messagesError: String? = null,
+    val messageReadRevisions: List<String> = emptyList()) {
+    /** 未读消息条数，用于「我的」页与消息页的角标。 */
+    val unreadMessageCount: Int get() {
+        val read = messageReadRevisions.toSet()
+        return messages.count { it.revision !in read }
+    }
+}
 class HydrosViewModel(
     val graph: HydrosDependencies,
 ) : ViewModel() {
@@ -129,7 +142,6 @@ class HydrosViewModel(
                 val notified = runCatching { graph.store.waterLimitNotifiedMonth() }.getOrNull()
                 val avatarPath = runCatching { graph.store.avatarPath() }.getOrNull()
                 val demo = runCatching { graph.store.demoMode() }.getOrDefault(false)
-                val voiceEnabled = runCatching { graph.store.voiceAssistantEnabled() }.getOrDefault(false)
                 val liquidGlass = runCatching { graph.store.liquidGlass() }.getOrDefault(true)
                 val fontFamily = runCatching { graph.store.fontFamily() }.getOrDefault("PINGFANG")
                 val fontWeightStep = runCatching { graph.store.fontWeightStep() }.getOrDefault(0)
@@ -149,7 +161,7 @@ class HydrosViewModel(
                     gradientPreset=gradientPreset, gradientEnabled=gradientEnabled, accentColor=accentColor,
                     wallpaperPath=wallpaperPath, wallpaperDim=wallpaperDim, wallpaperBlur=wallpaperBlur,
                     lastAccount=lastAccount,
-                    voiceAssistantEnabled=voiceEnabled, liquidGlass=liquidGlass,
+                    liquidGlass=liquidGlass,
                     waterUsage=it.waterUsage.copy(limitCents = waterLimitCents?.takeIf { value -> value > 0 })) }
                 if (demo) {
                     HydrosLog.log("demo", "启动时恢复演示数据模式")
@@ -187,6 +199,9 @@ class HydrosViewModel(
                         wallpaperPath=current.wallpaperPath, wallpaperDim=current.wallpaperDim,
                         wallpaperBlur=current.wallpaperBlur, lastAccount=current.lastAccount,
                         waterUsage=current.waterUsage.copy(limitCents = current.waterLimitCents?.takeIf { value -> value > 0 }),
+                        messages=if (auth != null) current.messages else emptyList(),
+                        messagesLoaded=auth != null && current.messagesLoaded,
+                        messageReadRevisions=if (auth != null) current.messageReadRevisions else emptyList(),
                         account=AccountUi(phone=auth?.phone ?: ""),
                         // 演示模式下保留本地方案，否则每次登录态刷新都会把演示设备与账单清空。
                         devices=if (current.demoMode) current.devices else saved?.devices ?: emptyList(),
@@ -368,11 +383,6 @@ class HydrosViewModel(
     fun liquidGlass(enabled: Boolean) { graph.scope.launch { action {
         graph.store.liquidGlass(enabled)
         mutable.update { it.copy(liquidGlass = enabled) }
-    } } }
-    /** 智能助手总开关：关闭后忽略外部语音指令，仅保留设置页入口。 */
-    fun voiceAssistantEnabled(enabled: Boolean) { graph.scope.launch { action {
-        mutable.update { it.copy(voiceAssistantEnabled = enabled) }
-        graph.store.voiceAssistantEnabled(enabled)
     } } }
     /** 保存自定义头像路径（由界面把相册图片复制到应用私有目录后回填），传 null 恢复默认头像。 */
     fun avatarPath(path: String?) {
@@ -819,9 +829,66 @@ class HydrosViewModel(
             }
         }
         billHistory.refresh()
+        loadMessages()
     }
     fun loadMonth(month: String) = billHistory.selectMonth(month)
     fun selectBillType(type: BillType) = billHistory.selectType(type)
+
+    private val messageRepository: org.cqutosp.hydros.data.messages.MessageRepository? by lazy {
+        graph.transport?.let { org.cqutosp.hydros.data.messages.RealMessageRepository(it) }
+    }
+
+    /** 拉取校园推送消息；首次同步只建立基线，不把历史消息当作未读。 */
+    fun loadMessages() {
+        if (mutable.value.demoMode) { HydrosLog.log("message", "演示模式下不请求校园消息"); return }
+        if (mutable.value.messagesLoading) return
+        val auth = graph.auth.credentials.value ?: return
+        viewModelScope.launch {
+            mutable.update { it.copy(messagesLoading = true, messagesError = null) }
+            try {
+                val repo = messageRepository ?: throw ApiFailure(null, "当前版本无法连接消息服务")
+                val list = repo.load(auth)
+                var receipts = runCatching { graph.store.messageReceipts() }.getOrDefault(MessageReceipts())
+                if (!receipts.initialized) {
+                    receipts = receipts.withBaseline(list)
+                    runCatching { graph.store.messageReceipts(receipts) }
+                }
+                if (graph.auth.credentials.value != auth) return@launch
+                mutable.update {
+                    it.copy(
+                        messages = list, messagesLoaded = true, messagesLoading = false, messagesError = null,
+                        messageReadRevisions = receipts.read,
+                    )
+                }
+                HydrosLog.log("message", "消息同步完成：共 " + list.size + " 条")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (graph.auth.credentials.value != auth) return@launch
+                HydrosLog.log("message", "消息同步失败：" + e.message)
+                mutable.update {
+                    it.copy(messagesLoading = false, messagesLoaded = true,
+                        messagesError = failureFeedback(e, FailureOperation.PROFILE).text)
+                }
+            }
+        }
+    }
+
+    fun markMessageRead(revision: String) = markMessagesRead(listOf(revision))
+
+    fun markAllMessagesRead() = markMessagesRead(mutable.value.messages.map { it.revision })
+
+    private fun markMessagesRead(revisions: Collection<String>) {
+        if (revisions.isEmpty()) return
+        val read = (mutable.value.messageReadRevisions + revisions).distinct().takeLast(MessageReceipts.MAX_ITEMS)
+        mutable.update { it.copy(messageReadRevisions = read) }
+        viewModelScope.launch {
+            runCatching {
+                val receipts = graph.store.messageReceipts()
+                graph.store.messageReceipts(receipts.copy(read = read))
+            }.onFailure { HydrosLog.log("message", "保存消息已读失败：" + it.message) }
+        }
+    }
 
     fun loadDetail(id: String, force: Boolean = false) {
         viewModelScope.launch { billHistory.loadDetail(id, force = force) }

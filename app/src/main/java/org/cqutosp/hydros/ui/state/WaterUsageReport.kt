@@ -57,7 +57,19 @@ data class WaterUsageReport(
     val tips: List<WaterTip> = emptyList(),
     /** 报告月份是否为当前自然月；历史月份不展示预测类信息。 */
     val isCurrentMonth: Boolean = true,
+    /** 本月累计用水量（毫升）：网关给的值优先，缺失的单按单价估算。 */
+    val totalWaterMilliLiters: Long = 0,
+    /** 计入用水量的记录数。 */
+    val waterRecordCount: Int = 0,
+    /** 其中由金额估算出用水量的记录数。 */
+    val estimatedWaterRecordCount: Int = 0,
 ) {
+    /** 本月用水量的展示文本，如 "128.4 L"；没有记录时为空。 */
+    val waterText: String? get() = org.cqutosp.hydros.data.billing.formatWaterVolume(
+        totalWaterMilliLiters.takeIf { waterRecordCount > 0 && it > 0 }
+    )
+    /** 用水量里是否包含估算值，页面据此加「含估算」。 */
+    val hasEstimatedWater: Boolean get() = estimatedWaterRecordCount > 0
     /** 限额进度，0f..1f；未设置限额时为 0f。 */
     val limitProgress: Float get() {
         val limit = limitCents?.takeIf { it > 0 } ?: return 0f
@@ -133,6 +145,15 @@ data class WaterUsageReport(
                 val stableScore = (30 * ((0.9 - cv) / 0.65)).coerceIn(0.0, 30.0)
                 (limitScore + nightScore + stableScore).roundToInt().coerceIn(0, 100)
             }
+
+            // 用水量：网关下发的实测值优先，缺失时用金额按单价折算，并记录估算条数。
+            val waterRecords = usage.mapNotNull { bill ->
+                val actual = bill.waterMilliLiters?.takeIf { it > 0 }
+                val value = actual ?: org.cqutosp.hydros.data.billing.estimateWaterMilliLiters(bill.amountMilli)
+                value?.let { it to (actual == null) }
+            }
+            val totalWater = waterRecords.sumOf { it.first }
+            val estimatedWater = waterRecords.count { it.second }
 
             val average = if (count > 0) total / count else 0L
             val peakAmount = usage.maxOfOrNull { it.amountCents ?: 0L } ?: 0L
@@ -224,6 +245,9 @@ data class WaterUsageReport(
                 monthOverMonthPercent = monthOverMonth,
                 tips = tips,
                 isCurrentMonth = isCurrentMonth,
+                totalWaterMilliLiters = totalWater,
+                waterRecordCount = waterRecords.size,
+                estimatedWaterRecordCount = estimatedWater,
             )
         }
         fun empty(month: YearMonth, limitCents: Long?): WaterUsageReport {

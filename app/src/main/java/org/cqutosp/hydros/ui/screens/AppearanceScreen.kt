@@ -14,7 +14,7 @@ import org.cqutosp.hydros.ui.components.SubtleDivider
 import org.cqutosp.hydros.ui.theme.ThemeMode
 
 /**
- * 应用外观总入口：深浅模式 + 主题色 / 强调色 / 字体 / 壁纸 / 桌面图标。
+ * 应用外观总入口：深浅模式 + 主题色 / 强调色 / 字体 / 壁纸。
  *
  * 除 [theme] 外的回调都有默认值，预览壳与测试可以继续零散参数调用。
  */
@@ -26,12 +26,10 @@ fun AppearanceScreen(
     gradientLabel: String = "默认",
     accentLabel: String = "跟随主题",
     wallpaperOn: Boolean = false,
-    iconLabel: String = "默认图标",
     onOpenFont: () -> Unit = {},
     onOpenThemeColor: () -> Unit = {},
     onOpenAccent: () -> Unit = {},
     onOpenWallpaper: () -> Unit = {},
-    onOpenIcon: () -> Unit = {},
 ) {
     PageColumn {
         Section("深浅模式") {
@@ -77,15 +75,6 @@ fun AppearanceScreen(
                 icon = R.drawable.ic_photo,
                 tone = IconTone.NEUTRAL,
                 onClick = onOpenWallpaper
-            )
-        }
-        Section("图标") {
-            MineRow(
-                title = "桌面图标",
-                supporting = iconLabel,
-                icon = R.drawable.ic_launcher_foreground,
-                tone = IconTone.PRIMARY,
-                onClick = onOpenIcon
             )
         }
     }

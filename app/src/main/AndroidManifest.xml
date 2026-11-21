@@ -42,59 +42,12 @@
             </intent-filter>
         </receiver>
         <service android:name=".service.SessionWatchService" android:exported="false" android:foregroundServiceType="connectedDevice" />
-        <!-- 桌面入口由 activity-alias 提供：指向同一个 MainActivity，靠 alias 的 enabled 状态切换图标。 -->
         <activity
             android:name=".MainActivity"
-            android:exported="true" />
-
-        <activity-alias
-            android:name=".DefaultIcon"
-            android:targetActivity=".MainActivity"
-            android:enabled="true"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_default"
-            android:roundIcon="@mipmap/ic_launcher_default"
-            android:label="@string/app_name">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".QzxyIcon"
-            android:targetActivity=".MainActivity"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_qzxy"
-            android:roundIcon="@mipmap/ic_launcher_qzxy"
-            android:label="@string/app_name">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <!-- 智能助手入口：hydros://voice?q=... 或带 VOICE_COMMAND extra 的 Intent。 -->
-        <activity
-            android:name=".voice.VoiceCommandActivity"
-            android:exported="true"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:theme="@android:style/Theme.NoDisplay">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="hydros" android:host="voice" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.ASSIST" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VOICE_COMMAND" />
-                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
     </application>

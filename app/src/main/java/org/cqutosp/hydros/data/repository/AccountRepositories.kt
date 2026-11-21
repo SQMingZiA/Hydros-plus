@@ -1,5 +1,6 @@
 package org.cqutosp.hydros.data.repository
 
+import org.cqutosp.hydros.data.billing.readWaterMilliLiters
 import org.cqutosp.hydros.data.ble.DeviceSigner
 import org.cqutosp.hydros.data.network.*
 import org.cqutosp.hydros.data.storage.HydrosStore
@@ -171,7 +172,14 @@ class RealWalletRepository(private val transport: CampusTransport) : WalletRepos
         return rows.mapIndexed { index, item ->
             val row = item as? JsonObject ?: throw ApiFailure(null, "账单格式不正确")
             when (type) {
-                BillType.CONSUMPTION -> parseBill(row.obj("consumeBillDTO") ?: throw ApiFailure(null, "消费账单格式不正确"))
+                BillType.CONSUMPTION -> {
+                    val parsed = parseBill(row.obj("consumeBillDTO") ?: throw ApiFailure(null, "消费账单格式不正确"))
+                    // 有的网关把用水量放在列表项外层，账单对象里没有，这里补一次兜底。
+                    if (parsed.waterMilliLiters == null) {
+                        val outer = readWaterMilliLiters(row)
+                        if (outer != null) parsed.copy(waterMilliLiters = outer, waterEstimated = false) else parsed
+                    } else parsed
+                }
                 BillType.RECHARGE -> parseRechargeBill(row.obj("rechargeBillDTO") ?: throw ApiFailure(null, "充值账单格式不正确"), index)
             }
         }
@@ -223,5 +231,7 @@ fun parseBill(obj: JsonObject, previous: BillUi? = null): BillUi {
         orderNo = obj.text("orderNo") ?: previous?.orderNo,
         durationText = obj.text("usingTimeDisplay")?.trim()?.takeIf(String::isNotEmpty) ?: previous?.durationText,
         recharge = recharge,
+        waterMilliLiters = readWaterMilliLiters(obj) ?: previous?.waterMilliLiters,
+        waterEstimated = false,
     )
 }

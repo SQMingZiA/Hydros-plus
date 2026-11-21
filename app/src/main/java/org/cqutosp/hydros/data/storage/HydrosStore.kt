@@ -37,7 +37,10 @@ import javax.crypto.spec.SecretKeySpec
     val waterLimitNotifiedMonth: String? = null, val avatarPath: String? = null, val demoMode: Boolean = false,
     val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null, val wallpaperDim: Float = 0.0f, val wallpaperBlur: Float = 0.0f,
-    val voiceAssistantEnabled: Boolean = false, /** 底部导航是否启用液态玻璃（折射+模糊），关闭后改为普通磨砂。 */ val liquidGlass: Boolean = true)
+    /** 底部导航是否启用液态玻璃（折射+模糊），关闭后改为普通磨砂。 */ val liquidGlass: Boolean = true,
+    /** 校园消息回执：是否已建立基线、出现过的版本号、已读版本号。 */
+    val messageBaseline: Boolean = false, val messageKnown: List<String> = emptyList(),
+    val messageRead: List<String> = emptyList())
 interface HydrosStore {
     suspend fun credentials(): Credentials?
     suspend fun credentials(value: Credentials?)
@@ -68,9 +71,10 @@ interface HydrosStore {
     /** 开发者演示数据模式：用本地模拟数据替代校园网关数据，便于无设备调试。 */
     suspend fun demoMode(): Boolean = false
     suspend fun demoMode(value: Boolean) {}
-    /** 智能助手：允许语音助手通过快捷指令/深链打开设备、查询余额与消费。 */
-    suspend fun voiceAssistantEnabled(): Boolean = false
-    suspend fun voiceAssistantEnabled(value: Boolean) {}
+    /** 校园消息回执（见 data/messages/MessageReceipts）。 */
+    suspend fun messageReceipts(): org.cqutosp.hydros.data.messages.MessageReceipts =
+        org.cqutosp.hydros.data.messages.MessageReceipts()
+    suspend fun messageReceipts(value: org.cqutosp.hydros.data.messages.MessageReceipts) {}
     /** 底部导航的液态玻璃效果开关，关闭后使用普通磨砂质感。 */
     suspend fun liquidGlass(): Boolean = true
     suspend fun liquidGlass(value: Boolean) {}
@@ -191,8 +195,12 @@ class PreferencesHydrosStore(context: Context) : HydrosStore {
     override suspend fun waterLimitNotifiedMonth(value: String?) { edit { it.copy(waterLimitNotifiedMonth = value) } }
     override suspend fun demoMode() = read().demoMode
     override suspend fun demoMode(value: Boolean) { edit { it.copy(demoMode = value) } }
-    override suspend fun voiceAssistantEnabled() = read().voiceAssistantEnabled
-    override suspend fun voiceAssistantEnabled(value: Boolean) { edit { it.copy(voiceAssistantEnabled = value) } }
+    override suspend fun messageReceipts() = read().let {
+        org.cqutosp.hydros.data.messages.MessageReceipts(it.messageBaseline, it.messageKnown, it.messageRead)
+    }
+    override suspend fun messageReceipts(value: org.cqutosp.hydros.data.messages.MessageReceipts) {
+        edit { it.copy(messageBaseline = value.initialized, messageKnown = value.known, messageRead = value.read) }
+    }
     override suspend fun liquidGlass() = read().liquidGlass
     override suspend fun liquidGlass(value: Boolean) { edit { it.copy(liquidGlass = value) } }
     override suspend fun fontWeightStep() = read().fontWeightStep

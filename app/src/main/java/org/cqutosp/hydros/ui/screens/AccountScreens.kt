@@ -22,6 +22,13 @@ import org.cqutosp.hydros.ui.state.*
 
 enum class AccountForm(val title: String) { PHONE("更换手机号"), PASSWORD("修改密码") }
 
+/** 138 **** 8000：管理账户页也默认脱敏，完整号码只在更换手机号页输入。 */
+private fun maskedPhone(phone: String): String = when {
+    phone.length >= 7 -> phone.take(3) + " **** " + phone.takeLast(4)
+    phone.isBlank() -> "未绑定手机号"
+    else -> phone
+}
+
 /** 平铺分组：白底、无卡片容器、无额外左右 padding（页面留白由 PageColumn 统一提供）。 */
 @Composable
 private fun AccountSurface(
@@ -41,55 +48,65 @@ fun ManageAccountScreen(
 ) {
     val snackbar = LocalHydrosSnackbar.current
     var logoutSheet by remember { mutableStateOf(false) }
+    val account = state.account
     PageColumn {
-        // 身份卡：圆角图标块 + 姓名 + 手机号 / 学校
+        // 身份区：头像 + 姓名 + 脱敏手机号，下面是学校与学号
         AccountSurface {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(top = 8.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 IconTile(
                     res = R.drawable.ic_person,
                     modifier = Modifier,
                     tone = IconTone.PRIMARY,
-                    size = 44.dp,
-                    iconSize = 22.dp
+                    size = 56.dp,
+                    iconSize = 28.dp
                 )
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = state.account.name,
-                        fontSize = 17.sp,
-                        lineHeight = 22.sp,
+                        text = account.name,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (state.account.phone.isNotBlank()) {
-                        Text(
-                            text = state.account.phone,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (state.account.school.isNotBlank()) {
-                        Text(
-                            text = state.account.school,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = maskedPhone(account.phone),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
-        Section("账户安全") {
-            MineRow("更换手机号", icon = R.drawable.ic_phone, tone = IconTone.PRIMARY, onClick = onPhone)
+        Section("账户资料") {
+            InfoRow("手机号", maskedPhone(account.phone))
             SubtleDivider(horizontalPadding = 0.dp)
-            MineRow("修改密码", icon = R.drawable.ic_lock, tone = IconTone.SECONDARY, onClick = onPassword)
+            InfoRow("学校", account.school)
+            SubtleDivider(horizontalPadding = 0.dp)
+            InfoRow("学号", account.studentId)
+        }
+        Section("账户安全") {
+            MineRow(
+                "更换手机号",
+                supporting = "更换后需用新号码接收验证码",
+                icon = R.drawable.ic_phone,
+                tone = IconTone.PRIMARY,
+                onClick = onPhone
+            )
+            SubtleDivider(horizontalPadding = 0.dp)
+            MineRow(
+                "修改密码",
+                supporting = "支持当前密码或短信验证码验证",
+                icon = R.drawable.ic_lock,
+                tone = IconTone.SECONDARY,
+                onClick = onPassword
+            )
         }
         DangerAction(
             label = "退出账户",

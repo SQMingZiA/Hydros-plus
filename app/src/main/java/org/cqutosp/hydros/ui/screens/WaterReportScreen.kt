@@ -151,6 +151,10 @@ fun WaterReportScreen(
         // 1) 本月概览：平铺信息行，行间 0.5dp 发丝线。
         Section("本月概览") {
             InfoRow("用水次数", report.sessionCount.toString() + " 次")
+            report.waterText?.let { water ->
+                SubtleDivider(horizontalPadding = 0.dp)
+                InfoRow("用水量", water)
+            }
             SubtleDivider(horizontalPadding = 0.dp)
             InfoRow("日均支出", "¥ " + money(report.dailyAverageCents))
             SubtleDivider(horizontalPadding = 0.dp)

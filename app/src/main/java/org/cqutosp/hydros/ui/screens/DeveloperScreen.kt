@@ -37,9 +37,7 @@ fun DeveloperScreen(
     devices: List<DeviceUi> = emptyList(),
     onAddDemoDevice: (String, String, DeviceCategory, Boolean) -> Unit = { _, _, _, _ -> },
     onUpdateDemoDevice: (String, String, String, DeviceCategory, Boolean) -> Unit = { _, _, _, _, _ -> },
-    onRemoveDemoDevice: (String) -> Unit = {},
-    voiceAssistantEnabled: Boolean = false,
-    onOpenVoiceAssistant: () -> Unit = {}
+    onRemoveDemoDevice: (String) -> Unit = {}
 ) {
     var adding by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<DeviceUi?>(null) }
@@ -106,14 +104,6 @@ fun DeveloperScreen(
                 icon = R.drawable.ic_receipt,
                 tone = IconTone.PRIMARY,
                 onClick = onOpenLogs
-            )
-            SubtleDivider()
-            MineRow(
-                title = "语音助手（实验）",
-                supporting = if (voiceAssistantEnabled) "已开启，可用深链或语音指令控制" else "已关闭，需要手动开启",
-                icon = R.drawable.ic_mic,
-                tone = IconTone.SECONDARY,
-                onClick = onOpenVoiceAssistant
             )
         }
         Section("构建信息") {

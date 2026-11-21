@@ -24,12 +24,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import org.cqutosp.hydros.R
 import org.cqutosp.hydros.data.HydrosApplication
+import org.cqutosp.hydros.data.messages.CampusMessage
 import org.cqutosp.hydros.data.storage.AndroidAppDataControl
-import org.cqutosp.hydros.ui.state.AppIconController
 import org.cqutosp.hydros.ui.state.HydrosViewModel
 import org.cqutosp.hydros.ui.HydrosBottomBar
 import org.cqutosp.hydros.ui.HomeWalletTabs
+import org.cqutosp.hydros.ui.HeaderChip
+import org.cqutosp.hydros.ui.NewVersionChip
 import org.cqutosp.hydros.ui.components.HoldActionHost
 import org.cqutosp.hydros.ui.components.HomeBackdrop
 import org.cqutosp.hydros.ui.components.HydrosPage
@@ -39,11 +42,11 @@ import org.cqutosp.hydros.ui.scanner.ScanState
 import org.cqutosp.hydros.ui.screens.AccountForm
 import org.cqutosp.hydros.ui.screens.AccountFormScreen
 import org.cqutosp.hydros.ui.screens.AboutScreen
-import org.cqutosp.hydros.data.storage.AppIconKeys
-import org.cqutosp.hydros.ui.screens.AppIconScreen
 import org.cqutosp.hydros.ui.screens.AppLogsScreen
 import org.cqutosp.hydros.ui.screens.AppearanceScreen
 import org.cqutosp.hydros.ui.screens.BillDetailScreen
+import org.cqutosp.hydros.ui.screens.CampusMessageDetailScreen
+import org.cqutosp.hydros.ui.screens.CampusMessagesScreen
 import org.cqutosp.hydros.ui.screens.DeviceDetailScreen
 import org.cqutosp.hydros.ui.screens.DeveloperScreen
 import org.cqutosp.hydros.ui.screens.DisplaySettingsScreen
@@ -69,7 +72,6 @@ import org.cqutosp.hydros.ui.screens.UpdateSourceScreen
 import org.cqutosp.hydros.ui.screens.UseCodeScreen
 import org.cqutosp.hydros.ui.components.LocalLiquidGlassEnabled
 import org.cqutosp.hydros.ui.screens.WalletScreen
-import org.cqutosp.hydros.ui.screens.VoiceAssistantScreen
 import org.cqutosp.hydros.ui.screens.WaterReportScreen
 import org.cqutosp.hydros.ui.theme.HydrosTheme
 import org.cqutosp.hydros.ui.theme.ThemeMode
@@ -98,8 +100,6 @@ class ScreenPreviewActivity : ComponentActivity() {
         val screen = intent.getStringExtra("screen") ?: "water"
         // 调试用：--ez liquidGlass false 可预览“普通磨砂”底栏。
         val liquidGlass = intent.getBooleanExtra("liquidGlass", true)
-        // 调试用：--es applyIcon QZXY|DEFAULT 可在启动预览页前切换桌面图标别名。
-        intent.getStringExtra("applyIcon")?.let { AppIconController.apply(this, it) }
         val month = YearMonth.now()
         val state = previewUiState(month = month, avatarPath = demoAvatarFile(this))
         val appData = AndroidAppDataControl(applicationContext)
@@ -115,7 +115,15 @@ class ScreenPreviewActivity : ComponentActivity() {
                     // ----- 首页 / 钱包 -----
                     "home" -> HydrosPage(
                         "首页",
-                        titleContent = { HomeWalletTabs(progress = 0f, onSelect = {}) },
+                        titleContent = {
+                            Box(Modifier.fillMaxWidth()) {
+                                HomeWalletTabs(progress = 0f, onSelect = {})
+                                NewVersionChip(
+                                    modifier = Modifier.align(androidx.compose.ui.Alignment.CenterEnd),
+                                    onClick = {},
+                                )
+                            }
+                        },
                         background = { HomeBackdrop() },
                         bottomBar = {
                             HydrosBottomBar(
@@ -135,9 +143,45 @@ class ScreenPreviewActivity : ComponentActivity() {
                             onStopNearby = {},
                         )
                     }
+                    "homeunread" -> HydrosPage(
+                        "首页",
+                        titleContent = {
+                            Box(Modifier.fillMaxWidth()) {
+                                HomeWalletTabs(progress = 0f, onSelect = {})
+                                HeaderChip(
+                                    text = "收到新消息",
+                                    icon = R.drawable.ic_message_circle,
+                                    tag = "message-chip",
+                                    modifier = Modifier.align(androidx.compose.ui.Alignment.CenterEnd),
+                                    onClick = {},
+                                )
+                            }
+                        },
+                        background = { HomeBackdrop() },
+                        bottomBar = {
+                            HydrosBottomBar(route = "home", onNavigate = {}, onScan = {}, onHeight = {}, messageUnread = 2)
+                        }
+                    ) {
+                        HomeScreen(
+                            state = state,
+                            onScan = {},
+                            onDevice = {},
+                            onSession = {},
+                            onScanNearby = {},
+                            onStopNearby = {},
+                        )
+                    }
                     "wallet" -> HydrosPage(
                         "钱包",
-                        titleContent = { HomeWalletTabs(progress = 1f, onSelect = {}) },
+                        titleContent = {
+                            Box(Modifier.fillMaxWidth()) {
+                                HomeWalletTabs(progress = 1f, onSelect = {})
+                                NewVersionChip(
+                                    modifier = Modifier.align(androidx.compose.ui.Alignment.CenterEnd),
+                                    onClick = {},
+                                )
+                            }
+                        },
                         background = { HomeBackdrop() },
                         bottomBar = {
                             HydrosBottomBar(route = "home", onNavigate = {}, onScan = {}, onHeight = {})
@@ -151,7 +195,10 @@ class ScreenPreviewActivity : ComponentActivity() {
                         bottomBar = { HydrosBottomBar(route = "mine", onNavigate = {}, onScan = {}, onHeight = {}) },
                     ) {
                         MineScreen(
-                            state = state,
+                            state = state.copy(
+                                messages = previewMessages(),
+                                messageReadRevisions = listOf("qm-3|2026-11-19 09:00"),
+                            ),
                             onManageAccount = {},
                             onAppearance = {},
                             onAbout = {},
@@ -325,8 +372,6 @@ class ScreenPreviewActivity : ComponentActivity() {
                                 onAddDemoDevice = vm::addDemoDevice,
                                 onUpdateDemoDevice = vm::updateDemoDevice,
                                 onRemoveDemoDevice = vm::removeDemoDevice,
-                                voiceAssistantEnabled = live.voiceAssistantEnabled,
-                                onOpenVoiceAssistant = {},
                             )
                         }
                     }
@@ -407,15 +452,6 @@ class ScreenPreviewActivity : ComponentActivity() {
                         }
                         SessionScreen(session = live.session, onFinish = vm::finish, onHome = {})
                     }
-                    "appicon" -> HydrosPage("桌面图标", onBack = {}) {
-                        AppIconScreen(
-                            current = AppIconKeys.DEFAULT,
-                            onSelect = {},
-                        )
-                    }
-                    "voice" -> HydrosPage("智能助手", onBack = {}) {
-                        VoiceAssistantScreen(enabled = true, onEnabled = {}, onTest = {})
-                    }
                     "feedback" -> HydrosPage("反馈设置", onBack = {}) {
                         FeedbackSettingsScreen(
                             settings = state.feedback,
@@ -453,10 +489,11 @@ class ScreenPreviewActivity : ComponentActivity() {
                             state = previewReleaseHistory(),
                             onRelease = {},
                             onLoad = {},
+                            source = org.cqutosp.hydros.data.update.UpdateSource.GITEE,
                         )
                     }
                     "releasedetail" -> HydrosPage(release.name, onBack = {}) {
-                        ReleaseDetailScreen(release)
+                        ReleaseDetailScreen(release.copy(source = org.cqutosp.hydros.data.update.UpdateSource.GITEE))
                     }
                     "developer" -> HydrosPage("开发者页面", onBack = {}) {
                         DeveloperScreen(
@@ -473,8 +510,6 @@ class ScreenPreviewActivity : ComponentActivity() {
                             onAddDemoDevice = { _, _, _, _ -> },
                             onUpdateDemoDevice = { _, _, _, _, _ -> },
                             onRemoveDemoDevice = {},
-                            voiceAssistantEnabled = true,
-                            onOpenVoiceAssistant = {},
                         )
                     }
                     "devlogs" -> HydrosPage("应用日志", onBack = {}) {
@@ -489,6 +524,19 @@ class ScreenPreviewActivity : ComponentActivity() {
                                 "16:21:26  recharge  刷新余额成功：¥ 30.09",
                             ),
                         )
+                    }
+                    "messages" -> HydrosPage("消息", background = { HomeBackdrop() },
+                        bottomBar = { HydrosBottomBar(route = "messages", onNavigate = {}, onScan = {}, onHeight = {}, messageUnread = 2) },
+                    ) {
+                        CampusMessagesScreen(
+                            messages = previewMessages(),
+                            readRevisions = listOf("qm-3|2026-11-19 09:00"),
+                            loaded = true,
+                            onOpen = {},
+                        )
+                    }
+                    "messagedetail" -> HydrosPage("消息详情", onBack = {}) {
+                        CampusMessageDetailScreen(previewMessages().first())
                     }
                     "licenses" -> HydrosPage("开源许可", onBack = {}) {
                         LicensesIndexScreen(onProject = {}, onThirdParty = {})
@@ -555,3 +603,29 @@ class ScreenPreviewActivity : ComponentActivity() {
         }
     }
 }
+
+/** 消息页预览数据：三条校园通知，其中一条已读。 */
+private fun previewMessages(): List<CampusMessage> = listOf(
+    CampusMessage(
+        id = "qm-1",
+        title = "今晚 22:00-23:30 4 号楼停水检修",
+        publishedAt = "2026-11-21 10:20",
+        summary = "4 号楼 6 层今晚 22:00 起停水检修，预计 23:30 恢复，请提前储水。",
+        body = "<div style=\"background:#FFFFFF;padding:20px 24px;\"><div style=\"margin-bottom:20px;text-align:center\"><h1 style=\"font-size:16px;color:#333333;\">南区宿舍停水通知</h1><div style=\"font-size:13px;color:#999999;\">2026-9-26 09:24:40</div></div><div style=\"font-size:13px;color:#333333;line-height:26px;\"><p>南区宿舍楼洗浴热水 9 月 26 日起停水检修水泵，10 月 6 日正常使用，给同学们造成不便敬请谅解。</p><p>检修期间请到北区公共浴室用水。</p></div></div>",
+    ),
+    CampusMessage(
+        id = "qm-2",
+        title = "本月水价调整说明",
+        publishedAt = "2026-11-20 16:05",
+        summary = "自 12 月 1 日起，宿舍热水单价调整为 0.028 元/L。",
+        body = "自 12 月 1 日起，宿舍热水单价由 0.027 元/L 调整为 0.028 元/L。已产生的账单仍按原单价结算，用水量估算也会随新单价生效。",
+    ),
+    CampusMessage(
+        id = "qm-3",
+        title = "欢迎使用 Hydros+",
+        publishedAt = "2026-11-19 09:00",
+        summary = "扫码即可取水，账单、用水报告与限额都可以在应用里查看。",
+        body = "欢迎使用 Hydros+。你可以在首页扫码连接设备，在钱包里查看每一笔账单，在“我的”里查看智能用水报告并设置用水限额。",
+    ),
+)
+

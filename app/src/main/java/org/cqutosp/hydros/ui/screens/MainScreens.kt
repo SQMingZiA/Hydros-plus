@@ -435,6 +435,7 @@ fun MineScreen(
     onDorm: () -> Unit = {},
     onRecharge: () -> Unit = {},
     onAvatarPath: (String?) -> Unit = {},
+    onMessages: () -> Unit = {},
 ) {
     var limitEditing by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -483,6 +484,20 @@ fun MineScreen(
             InlineState("账户资料未更新", state.accountError, action = "刷新资料", onAction = onRefresh)
         }
         Section("校园服务") {
+            val unread = state.unreadMessageCount
+            MineRow("校园消息", icon = R.drawable.ic_message_circle, tone = IconTone.PRIMARY,
+                trailing = if (unread > 0) {
+                    {
+                        Text(
+                            unread.toString() + " 条未读",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                } else null,
+                onClick = onMessages)
+            SubtleDivider()
             MineRow("智能用水报告", icon = R.drawable.ic_water, tone = IconTone.PRIMARY,
                 trailing = {
                     Text(
@@ -634,6 +649,12 @@ fun BillDetailScreen(
                 if (!bill.recharge && bill.consumeDate.isNotBlank()) {
                     SubtleDivider()
                     InfoRow("消费日期", bill.consumeDate.take(10))
+                }
+                if (!bill.recharge) {
+                    bill.waterText?.let { water ->
+                        SubtleDivider()
+                        InfoRow("用水量", water)
+                    }
                 }
                 SubtleDivider()
                 InfoRow("订单编号", bill.id)

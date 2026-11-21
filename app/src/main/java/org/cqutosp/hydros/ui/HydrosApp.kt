@@ -84,7 +84,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModel
 import androidx.compose.ui.platform.LocalContext
 import org.cqutosp.hydros.data.HydrosApplication
-import org.cqutosp.hydros.data.storage.AppIconKeys
 import org.cqutosp.hydros.data.storage.PostSessionDestination
 import android.os.Build
 import android.Manifest
@@ -134,16 +133,13 @@ import org.cqutosp.hydros.ui.components.drawLiquidGlassPanel
 import org.cqutosp.hydros.ui.components.drawLiquidGlassBallTint
 import org.cqutosp.hydros.ui.components.LocalHydrosWallpaper
 import org.cqutosp.hydros.ui.components.WallpaperConfig
-import org.cqutosp.hydros.ui.state.AppIconController
 import androidx.activity.result.PickVisualMediaRequest
 import org.cqutosp.hydros.ui.theme.IosTokens
-import android.speech.tts.TextToSpeech
-import org.cqutosp.hydros.voice.VoiceCommand
-import org.cqutosp.hydros.voice.VoiceCommands
 
 private data class AppDestination(val route: String, val label: String, val icon: Int, val iconOutline: Int)
 private val destinations = listOf(
     AppDestination("home", "首页", R.drawable.ic_home, R.drawable.ic_home),
+    AppDestination("messages", "消息", R.drawable.ic_message_circle, R.drawable.ic_message_circle),
     AppDestination("recharge", "充值", R.drawable.ic_wallet, R.drawable.ic_wallet_outline),
     AppDestination("mine", "我的", R.drawable.ic_person, R.drawable.ic_person_outline),
 )
@@ -231,64 +227,6 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
             return
         }
         nav.navigate(destination)
-    }
-    val speak = rememberVoiceSpeaker()
-    fun runVoiceCommand(command: VoiceCommand): String {
-        if (!state.voiceAssistantEnabled) return "智能助手已关闭，请在“我的 - 智能助手”里重新开启。"
-        if (!state.signedIn) return "请先登录 Hydros+ 再使用语音指令。"
-        return when (command) {
-            is VoiceCommand.Start -> {
-                val device = state.devices.firstOrNull {
-                    VoiceCommands.matchesDevice(it.name, it.location, command.deviceQuery)
-                } ?: state.devices.firstOrNull()
-                val session = state.session
-                when {
-                    device == null -> "还没有可用的设备，请先在首页连接设备。"
-                    session != null -> "已经有设备在使用中：" + session.device.name + "。"
-                    state.demoMode -> "当前是演示数据模式，不会真实取水。"
-                    else -> {
-                        model.start(device)
-                        "正在打开" + device.name + "。"
-                    }
-                }
-            }
-            is VoiceCommand.Stop -> {
-                if (state.session == null) "当前没有正在进行的用水。"
-                else if (state.demoMode) "当前是演示数据模式，没有真实用水可以结束。"
-                else { model.finish(); "已结束本次用水。" }
-            }
-            VoiceCommand.Balance -> {
-                if (!state.walletLoaded) model.refresh()
-                val cents = state.wallet.totalCents
-                if (cents == null) "余额暂时取不到，请稍后再试。" else "钱包余额 " + money(cents) + " 元。"
-            }
-            VoiceCommand.Consumption -> {
-                val report = state.waterUsage
-                "本月用水支出 " + money(report.totalCents) + " 元，共 " + report.sessionCount + " 次用水。"
-            }
-            VoiceCommand.Recharge -> {
-                openPage("recharge")
-                "已打开充值页面。"
-            }
-            VoiceCommand.Help -> VoiceCommands.HELP_TEXT
-            is VoiceCommand.Unknown -> "没听清“" + command.raw + "”。" + VoiceCommands.HELP_TEXT
-        }
-    }
-    var voiceRequest by rememberSaveable { mutableStateOf<String?>(null) }
-    val activity = LocalActivity.current as? ComponentActivity
-    DisposableEffect(activity) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && activity != null) {
-                val intent = activity.intent
-                val command = intent?.getStringExtra(VoiceCommands.EXTRA_COMMAND)
-                if (!command.isNullOrBlank()) {
-                    voiceRequest = command
-                    intent.removeExtra(VoiceCommands.EXTRA_COMMAND)
-                }
-            }
-        }
-        activity?.lifecycle?.addObserver(observer)
-        onDispose { activity?.lifecycle?.removeObserver(observer) }
     }
     var handledSession by rememberSaveable { mutableStateOf<String?>(null) }
     var billFromSession by rememberSaveable { mutableStateOf(false) }
@@ -469,18 +407,6 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                 onSession = { openPage("session") })
             HoldActionHost {
                 Box(Modifier.fillMaxSize()) {
-                    // 语音指令面板放在主题内，否则弹层会退回 Material 默认配色。
-                    voiceRequest?.let { raw ->
-                        VoiceCommandSheet(
-                            raw = raw,
-                            onDismiss = { voiceRequest = null },
-                            onExecute = { command ->
-                                val reply = runVoiceCommand(command)
-                                speak(reply)
-                                reply
-                            },
-                        )
-                    }
                     NavHost(
                         // Fading only the parent over this backplate gives a subtle 10% scrim.
                         navController = nav, startDestination = "home", modifier = Modifier.fillMaxSize().background(Color.Black).pointerInput(state.reauthentication, route) {
@@ -512,17 +438,38 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                             val tabProgress = pageState.currentPage + pageState.currentPageOffsetFraction
                             HydrosPage("首页",
                                 titleContent = {
-                                    HomeWalletTabs(progress = tabProgress, onSelect = { target ->
-                                        pageScope.launch {
-                                            if (state.feedback.reduceMotionEnabled) pageState.scrollToPage(target)
-                                            else pageState.animateScrollToPage(target)
+                                    // HomeWalletTabs 自身会把宽度撑满标题区，所以「新版本可用」用同一
+                                    // Box 的 End 对齐叠在右侧空白处，保证一定落在可见区域内。
+                                    Box(Modifier.fillMaxWidth()) {
+                                        HomeWalletTabs(progress = tabProgress, onSelect = { target ->
+                                            pageScope.launch {
+                                                if (state.feedback.reduceMotionEnabled) pageState.scrollToPage(target)
+                                                else pageState.animateScrollToPage(target)
+                                            }
+                                        })
+                                        // 顶栏最右侧只放一个入口：未读消息优先，其次才是新版本。
+                                        when {
+                                            state.unreadMessageCount > 0 -> HeaderChip(
+                                                text = "收到新消息",
+                                                icon = R.drawable.ic_message_circle,
+                                                tag = "message-chip",
+                                                modifier = Modifier.align(Alignment.CenterEnd),
+                                                onClick = { main("messages") },
+                                            )
+                                            updates.hasUpdate -> HeaderChip(
+                                                text = "新版本可用",
+                                                icon = R.drawable.ic_download,
+                                                tag = "update-chip",
+                                                modifier = Modifier.align(Alignment.CenterEnd),
+                                                onClick = { openPage("about/update") },
+                                            )
                                         }
-                                    })
+                                    }
                                 },
                                 background = if (hydrosWallpaper == null) {
                                     { org.cqutosp.hydros.ui.components.HomeBackdrop() }
                                 } else null,
-                                bottomBar = { HydrosBottomBar("home", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight) }) {
+                                bottomBar = { HydrosBottomBar("home", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight, messageUnread = state.unreadMessageCount) }) {
                                 HorizontalPager(
                                     state = pageState,
                                     modifier = Modifier.fillMaxSize().testTag("primary-pager"),
@@ -548,7 +495,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 background = if (hydrosWallpaper == null) {
                                     { org.cqutosp.hydros.ui.components.HomeBackdrop() }
                                 } else null,
-                                bottomBar = { HydrosBottomBar("recharge", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight) }) {
+                                bottomBar = { HydrosBottomBar("recharge", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight, messageUnread = state.unreadMessageCount) }) {
                                 RechargeTab(thirdParty = thirdParty, context = context, snackbar = snackbar,
                                     school = state.account.school.takeIf { it.isNotBlank() && it != "—" })
                             }
@@ -557,7 +504,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                             HydrosPage("我的", background = if (hydrosWallpaper == null) {
                                 { org.cqutosp.hydros.ui.components.HomeBackdrop() }
                             } else null,
-                                bottomBar = { HydrosBottomBar("mine", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight) }) {
+                                bottomBar = { HydrosBottomBar("mine", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight, messageUnread = state.unreadMessageCount) }) {
                                 primaryStates.SaveableStateProvider("mine") {
                                     MineScreen(state, onRefresh = model::refresh, onManageAccount = { openPage("account") },
                                         onAppearance = { openPage("appearance") },
@@ -568,8 +515,35 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                         onUseCode = { openPage("thirdparty/usecode") },
                                         onDorm = { openPage("thirdparty/dorm") },
                                         onAvatarPath = model::avatarPath,
+                                        onMessages = { main("messages") },
                                         onAbout = { openPage("about") }, hasUpdate = updates.hasUpdate)
                                 }
+                            }
+                        }
+                        composable("messages") {
+                            HydrosPage("消息", background = if (hydrosWallpaper == null) {
+                                { org.cqutosp.hydros.ui.components.HomeBackdrop() }
+                            } else null,
+                                bottomBar = { HydrosBottomBar("messages", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight, messageUnread = state.unreadMessageCount) }) {
+                                primaryStates.SaveableStateProvider("messages") {
+                                    CampusMessagesScreen(
+                                        messages = state.messages,
+                                        readRevisions = state.messageReadRevisions,
+                                        loading = state.messagesLoading,
+                                        loaded = state.messagesLoaded,
+                                        error = state.messagesError,
+                                        onRefresh = model::loadMessages,
+                                        onMarkAllRead = model::markAllMessagesRead,
+                                        onOpen = { openPage("message/" + Uri.encode(it.id)) },
+                                    )
+                                }
+                            }
+                        }
+                        composable("message/{id}") { entry ->
+                            val id = entry.arguments?.getString("id").orEmpty()
+                            val message = state.messages.firstOrNull { it.id == id }
+                            HydrosPage("消息详情", onBack = { back() }) {
+                                CampusMessageDetailScreen(message, onRead = { model.markMessageRead(it.revision) })
                             }
                         }
                         composable("account") {
@@ -588,15 +562,10 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                     gradientLabel = if (!state.gradientEnabled) "纯色背景" else GradientPreset.fromKey(state.gradientPreset).label,
                                     accentLabel = state.accentColor?.let { "自定义 #%06X".format(it and 0xFFFFFF) } ?: "跟随主题",
                                     wallpaperOn = !state.wallpaperPath.isNullOrBlank(),
-                                    iconLabel = when (AppIconController.currentAppIcon(context)) {
-                                        "QZXY" -> "趣智校园"
-                                        else -> "默认图标"
-                                    },
                                     onOpenFont = { openPage("appearance/font") },
                                     onOpenThemeColor = { openPage("appearance/gradient") },
                                     onOpenAccent = { openPage("appearance/theme-color") },
                                     onOpenWallpaper = { openPage("appearance/wallpaper") },
-                                    onOpenIcon = { openPage("appearance/icon") },
                                 )
                             }
                         }
@@ -638,25 +607,6 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                     onClear = { model.wallpaperPath(null); snackbar.show("已恢复渐变背景") },
                                     onDim = model::wallpaperDim,
                                     onBlur = model::wallpaperBlur,
-                                )
-                            }
-                        }
-                        composable("appearance/icon") {
-                            var iconKey by remember { mutableStateOf(AppIconController.currentAppIcon(context)) }
-                            HydrosPage("桌面图标", onBack = { back() }) {
-                                AppIconScreen(
-                                    current = iconKey,
-                                    onSelect = { key ->
-                                        val applied = AppIconController.apply(context, key)
-                                        iconKey = AppIconController.currentAppIcon(context)
-                                        snackbar.show(
-                                            if (applied) {
-                                                "已切换桌面图标；桌面没刷新时可用「添加到桌面」新建入口"
-                                            } else {
-                                                "切换失败，请重试；仍不行可用「添加到桌面」新建入口"
-                                            }
-                                        )
-                                    },
                                 )
                             }
                         }
@@ -753,19 +703,6 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 }
                             }
                         }
-                        composable("voice") {
-                            HydrosPage("智能助手", onBack = { back() }) {
-                                VoiceAssistantScreen(
-                                    enabled = state.voiceAssistantEnabled,
-                                    onEnabled = model::voiceAssistantEnabled,
-                                    onTest = { command ->
-                                        val reply = runVoiceCommand(VoiceCommands.parse(command))
-                                        speak(reply)
-                                        snackbar.show(reply)
-                                    },
-                                )
-                            }
-                        }
                         composable("water/report") {
                             HydrosPage("智能用水报告", onBack = { back() }) {
                                 WaterReportScreen(
@@ -816,7 +753,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                             LaunchedEffect(Unit) { if (!history.loaded) appInfo.loadHistory() }
                             HydrosPage("更新历史", onBack = { back() }) {
                                 ReleaseHistoryScreen(history, onRelease = { openPage("about/releases/${android.net.Uri.encode(it.tag)}") },
-                                    onLoad = { appInfo.loadHistory() })
+                                    onLoad = { appInfo.loadHistory() }, source = state.updateSource)
                             }
                         }
                         composable("about/releases/{tag}") { entry ->
@@ -824,7 +761,8 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                             LaunchedEffect(tag) { appInfo.loadRelease(tag) }
                             HydrosPage(detail.releases.firstOrNull()?.name ?: tag, onBack = { back() }) {
                                 detail.releases.firstOrNull()?.let { ReleaseDetailScreen(it) }
-                                    ?: ReleaseHistoryScreen(detail, onRelease = {}, onLoad = { appInfo.loadRelease(tag) })
+                                    ?: ReleaseHistoryScreen(detail, onRelease = {}, onLoad = { appInfo.loadRelease(tag) },
+                                        source = state.updateSource)
                             }
                         }
                         composable("about/developer") {
@@ -859,8 +797,6 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                     onAddDemoDevice = model::addDemoDevice,
                                     onUpdateDemoDevice = model::updateDemoDevice,
                                     onRemoveDemoDevice = model::removeDemoDevice,
-                                    voiceAssistantEnabled = state.voiceAssistantEnabled,
-                                    onOpenVoiceAssistant = { openPage("voice") },
                                 )
                                 if (confirmClear) {
                                     AlertDialog(
@@ -1019,6 +955,45 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
     }
 }
 
+/** 顶栏右侧的「新版本可用」胶囊，只在检测到新版本时出现。 */
+@Composable
+internal fun NewVersionChip(modifier: Modifier = Modifier, onClick: () -> Unit) =
+    HeaderChip(text = "新版本可用", icon = R.drawable.ic_download, tag = "update-chip", modifier = modifier, onClick = onClick)
+
+/** 顶栏右侧的胶囊提示：新版本与未读消息共用同一种样式。 */
+@Composable
+internal fun HeaderChip(
+    text: String,
+    icon: Int,
+    tag: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val haptics = rememberHydrosHaptics()
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(999.dp)
+    Row(
+        modifier
+            .testTag(tag)
+            .clip(shape)
+            .background(colors.primary.copy(alpha = 0.12f))
+            .clickable { haptics.light(); onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Glyph(icon, modifier = Modifier.size(12.dp), tint = colors.primary)
+        Text(
+            text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = colors.primary,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
 /** 顶部一级标签：首页 / 钱包。progress 是 pager 的连续位置（0..1），跟随手势平滑过渡。 */
 @Composable
 internal fun HomeWalletTabs(progress: Float, onSelect: (Int) -> Unit) {
@@ -1078,7 +1053,13 @@ internal fun HomeWalletTabs(progress: Float, onSelect: (Int) -> Unit) {
 
 /** 液态玻璃底部导航：悬浮圆角玻璃基底 + 可拖动液滴药丸 + 相邻融合 + 扫码玻璃球。 */
 @Composable
-internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan: () -> Unit, onHeight: (Int) -> Unit) {
+internal fun HydrosBottomBar(
+    route: String,
+    onNavigate: (String) -> Unit,
+    onScan: () -> Unit,
+    onHeight: (Int) -> Unit,
+    messageUnread: Int = 0,
+) {
     val haptics = rememberHydrosHaptics()
     val density = LocalDensity.current
     val dark = isDarkScheme()
@@ -1250,12 +1231,25 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                                         translationY = -1.dp.toPx() * prox
                                     }
                                 ) {
-                                    Glyph(
-                                        if (selected) destination.icon else destination.iconOutline,
-                                        modifier = Modifier.size(21.dp),
-                                        tint = if (selected) colors.primary else colors.onSurfaceVariant,
-                                        description = destination.label
-                                    )
+                                    Box {
+                                        Glyph(
+                                            if (selected) destination.icon else destination.iconOutline,
+                                            modifier = Modifier.size(21.dp),
+                                            tint = if (selected) colors.primary else colors.onSurfaceVariant,
+                                            description = destination.label
+                                        )
+                                        // 消息标签上的未读小圆点，位置贴着图标右上角。
+                                        if (destination.route == "messages" && messageUnread > 0) {
+                                            Box(
+                                                Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .graphicsLayer { translationX = 4.dp.toPx(); translationY = (-2).dp.toPx() }
+                                                    .size(7.dp)
+                                                    .clip(CircleShape)
+                                                    .background(colors.error)
+                                            )
+                                        }
+                                    }
                                     Text(
                                         destination.label,
                                         style = MaterialTheme.typography.labelSmall,
@@ -1398,65 +1392,4 @@ private fun storeWallpaperFile(context: android.content.Context, uri: Uri): Stri
     }.getOrNull()
 }
 
-/** 简易 TTS 播报；初始化失败时静默降级，界面上的文字提示仍然可见。 */
-@Composable
-private fun rememberVoiceSpeaker(): (String) -> Unit {
-    val context = LocalContext.current
-    val engineRef = remember { mutableStateOf<TextToSpeech?>(null) }
-    DisposableEffect(Unit) {
-        var engine: TextToSpeech? = null
-        engine = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) engineRef.value = engine else engine?.shutdown()
-        }
-        engineRef.value = engine
-        onDispose {
-            engine?.stop()
-            engine?.shutdown()
-            engineRef.value = null
-        }
-    }
-    return remember {
-        { text: String ->
-            engineRef.value?.let { engine ->
-                engine.setLanguage(java.util.Locale.SIMPLIFIED_CHINESE)
-                engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "hydros-voice")
-            }
-        }
-    }
-}
 
-/** 语音指令确认面板：先展示解析结果，用户点执行后才真正操作设备。 */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun VoiceCommandSheet(raw: String, onDismiss: () -> Unit, onExecute: (VoiceCommand) -> String) {
-    val command = remember(raw) { VoiceCommands.parse(raw) }
-    var reply by remember(raw) { mutableStateOf<String?>(null) }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text("语音指令", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(
-                "“" + raw + "”",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                VoiceCommands.describe(command),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            reply?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            PrimaryAction(
-                label = if (reply == null) "执行" else "已完成",
-                icon = R.drawable.ic_mic,
-                enabled = reply == null,
-                onClick = { reply = onExecute(command) },
-            )
-            TextAction("关闭", onClick = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally))
-        }
-    }
-}

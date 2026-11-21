@@ -71,6 +71,9 @@ fun SoftwareUpdateScreen(
                         MineRow("最新版本", supporting = release.name, icon = R.drawable.ic_update, tone = IconTone.PRIMARY)
                         SubtleDivider()
                         MineRow("发布日期", supporting = publishedDate(release.publishedAt), icon = R.drawable.ic_calendar, tone = IconTone.SECONDARY)
+                        SubtleDivider()
+                        MineRow("更新来源", supporting = updateSource.label + " · " + updateSource.repository,
+                            icon = R.drawable.ic_refresh, tone = IconTone.NEUTRAL)
                     }
                 }
                 release?.notes?.takeIf { it.isNotBlank() }?.let { notes ->
@@ -182,7 +185,7 @@ fun SoftwareUpdateScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                "v" + BuildConfig.VERSION_NAME,
+                                "v" + BuildConfig.VERSION_NAME + " · 更新源 " + updateSource.label,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -193,13 +196,14 @@ fun SoftwareUpdateScreen(
             }
         }
         Section("更多信息") {
-            MineRow("更新历史", icon = R.drawable.ic_history, tone = IconTone.PRIMARY, onClick = onHistory)
+            MineRow("更新历史", supporting = "全部版本来自 " + updateSource.label, icon = R.drawable.ic_history,
+                tone = IconTone.PRIMARY, onClick = onHistory)
             SubtleDivider()
             MineRow("更新源", supporting = updateSource.label, icon = R.drawable.ic_refresh,
                 onClick = onOpenUpdateSource, trailing = { Glyph(R.drawable.ic_chevron, Modifier.size(16.dp)) })
             SubtleDivider()
-            MineRow("源代码仓库", supporting = HYDROS_GITHUB_REPO, icon = R.drawable.ic_code,
-                onClick = { uri.openUri(HYDROS_REPOSITORY) }, trailing = { Glyph(R.drawable.ic_open_in_new, Modifier.size(18.dp)) })
+            MineRow("源代码仓库", supporting = updateSource.repository, icon = R.drawable.ic_code,
+                onClick = { runCatching { uri.openUri(updateSource.homepage) } }, trailing = { Glyph(R.drawable.ic_open_in_new, Modifier.size(18.dp)) })
         }
     }
 }
@@ -237,9 +241,14 @@ fun UpdateSourceScreen(selected: UpdateSource, onSelect: (UpdateSource) -> Unit)
 }
 
 @Composable
-fun ReleaseHistoryScreen(state: ReleaseHistoryUiState, onRelease: (AppRelease) -> Unit, onLoad: () -> Unit) {
+fun ReleaseHistoryScreen(
+    state: ReleaseHistoryUiState,
+    onRelease: (AppRelease) -> Unit,
+    onLoad: () -> Unit,
+    source: UpdateSource = UpdateSource.GITEE,
+) {
     PageColumn {
-        if (state.releases.isNotEmpty()) Section("全部版本") {
+        if (state.releases.isNotEmpty()) Section("全部版本 · " + source.label) {
             state.releases.forEachIndexed { index, release ->
                 if (index > 0) SubtleDivider()
                 MineRow(
@@ -271,6 +280,9 @@ fun ReleaseDetailScreen(release: AppRelease) {
             MineRow("版本标签", supporting = release.tag, icon = R.drawable.ic_update, tone = IconTone.PRIMARY)
             SubtleDivider()
             MineRow("发布日期", supporting = publishedDate(release.publishedAt), icon = R.drawable.ic_calendar, tone = IconTone.SECONDARY)
+            SubtleDivider()
+            MineRow("更新来源", supporting = release.source.label + " · " + release.source.repository,
+                icon = R.drawable.ic_refresh, tone = IconTone.NEUTRAL)
         }
         Section("更新内容") { Markdown(release.notes.ifBlank { "暂无更新内容。" }, Modifier.padding(16.dp)) }
         SecondaryAction("查看发布页", icon = R.drawable.ic_open_in_new, onClick = { uri.openUri(release.url) })
