@@ -16,10 +16,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -505,6 +507,15 @@ fun HydrosPage(
     val backdrop = remember { LiquidBackdropState() }
     val backdropLayer = rememberGraphicsLayer()
     SideEffect { backdrop.layer = backdropLayer }
+    // 每 600ms 把整屏内容降采样成一张磨砂底图：底栏据此做透视 + 折射，
+    // 不依赖 RenderEffect（部分设备/模拟器上会被静默丢弃）。
+    LaunchedEffect(backdrop) {
+        delay(120)
+        while (true) {
+            runCatching { backdrop.captureBlurred(backdropLayer, downsample = 8) }
+            delay(600)
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         CompositionLocalProvider(
             LocalLiquidBackdrop provides backdrop,

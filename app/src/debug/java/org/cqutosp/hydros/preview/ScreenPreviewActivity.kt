@@ -66,6 +66,7 @@ import org.cqutosp.hydros.ui.screens.ScanContent
 import org.cqutosp.hydros.ui.screens.SessionScreen
 import org.cqutosp.hydros.ui.screens.SoftwareUpdateScreen
 import org.cqutosp.hydros.ui.screens.UseCodeScreen
+import org.cqutosp.hydros.ui.components.LocalLiquidGlassEnabled
 import org.cqutosp.hydros.ui.screens.WalletScreen
 import org.cqutosp.hydros.ui.screens.VoiceAssistantScreen
 import org.cqutosp.hydros.ui.screens.WaterReportScreen
@@ -94,6 +95,8 @@ class ScreenPreviewActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val screen = intent.getStringExtra("screen") ?: "water"
+        // 调试用：--ez liquidGlass false 可预览“普通磨砂”底栏。
+        val liquidGlass = intent.getBooleanExtra("liquidGlass", true)
         // 调试用：--es applyIcon QZXY|DEFAULT 可在启动预览页前切换桌面图标别名。
         intent.getStringExtra("applyIcon")?.let { AppIconController.apply(this, it) }
         val month = YearMonth.now()
@@ -104,6 +107,9 @@ class ScreenPreviewActivity : ComponentActivity() {
         val release = previewRelease()
         setContent {
             HydrosTheme(mode = ThemeMode.LIGHT) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    LocalLiquidGlassEnabled provides liquidGlass
+                ) {
                 when (screen) {
                     // ----- 首页 / 钱包 -----
                     "home" -> HydrosPage(
@@ -535,6 +541,7 @@ class ScreenPreviewActivity : ComponentActivity() {
                             onWaterLimit = {},
                         )
                     }
+                }
                 }
             }
         }

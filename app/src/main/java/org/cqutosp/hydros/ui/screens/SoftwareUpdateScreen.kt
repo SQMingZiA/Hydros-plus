@@ -236,6 +236,6 @@ fun ReleaseDetailScreen(release: AppRelease) {
             MineRow("发布日期", supporting = publishedDate(release.publishedAt), icon = R.drawable.ic_calendar, tone = IconTone.SECONDARY)
         }
         Section("更新内容") { Markdown(release.notes.ifBlank { "暂无更新内容。" }, Modifier.padding(16.dp)) }
-        SecondaryAction("在 GitHub 查看", icon = R.drawable.ic_open_in_new, onClick = { uri.openUri(release.url) })
+        SecondaryAction("查看发布页", icon = R.drawable.ic_open_in_new, onClick = { uri.openUri(release.url) })
     }
 }

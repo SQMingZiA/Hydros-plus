@@ -43,7 +43,7 @@ data class HydrosUiState(val initializing: Boolean = true, val signedIn: Boolean
     val walletError: String? = null, val billsError: String? = null, val message: String? = null, val working: Boolean = false,
     val postSessionDestination: PostSessionDestination = PostSessionDestination.BILL,
     val resolvingPostSessionDestination: Boolean = false, val postSessionBillId: String? = null,
-    val demoMode: Boolean = false, val voiceAssistantEnabled: Boolean = false,
+    val demoMode: Boolean = false, val voiceAssistantEnabled: Boolean = false, val liquidGlass: Boolean = true,
     val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null,
     val wallpaperDim: Float = 0f, val wallpaperBlur: Float = 0f,
@@ -126,6 +126,7 @@ class HydrosViewModel(
                 val avatarPath = runCatching { graph.store.avatarPath() }.getOrNull()
                 val demo = runCatching { graph.store.demoMode() }.getOrDefault(false)
                 val voiceEnabled = runCatching { graph.store.voiceAssistantEnabled() }.getOrDefault(false)
+                val liquidGlass = runCatching { graph.store.liquidGlass() }.getOrDefault(true)
                 val fontFamily = runCatching { graph.store.fontFamily() }.getOrDefault("PINGFANG")
                 val fontWeightStep = runCatching { graph.store.fontWeightStep() }.getOrDefault(0)
                 val gradientPreset = runCatching { graph.store.gradientPreset() }.getOrDefault("DEFAULT")
@@ -143,7 +144,7 @@ class HydrosViewModel(
                     gradientPreset=gradientPreset, gradientEnabled=gradientEnabled, accentColor=accentColor,
                     wallpaperPath=wallpaperPath, wallpaperDim=wallpaperDim, wallpaperBlur=wallpaperBlur,
                     lastAccount=lastAccount,
-                    voiceAssistantEnabled=voiceEnabled,
+                    voiceAssistantEnabled=voiceEnabled, liquidGlass=liquidGlass,
                     waterUsage=it.waterUsage.copy(limitCents = waterLimitCents?.takeIf { value -> value > 0 })) }
                 if (demo) {
                     HydrosLog.log("demo", "启动时恢复演示数据模式")
@@ -174,6 +175,7 @@ class HydrosViewModel(
                         postSessionDestination=current.postSessionDestination,
                         homeConnectCardVisible=current.homeConnectCardVisible, waterLimitCents=current.waterLimitCents,
                         waterLimitNotifiedMonth=current.waterLimitNotifiedMonth, avatarPath=current.avatarPath,
+                        liquidGlass=current.liquidGlass,
                         fontFamily=current.fontFamily, fontWeightStep=current.fontWeightStep,
                         gradientPreset=current.gradientPreset,
                         gradientEnabled=current.gradientEnabled, accentColor=current.accentColor,
@@ -350,6 +352,11 @@ class HydrosViewModel(
             mutable.update { it.copy(homeConnectCardVisible = enabled) }
         } }
     }
+    /** 底部导航液态玻璃开关：关闭后改为普通磨砂质感。 */
+    fun liquidGlass(enabled: Boolean) { graph.scope.launch { action {
+        graph.store.liquidGlass(enabled)
+        mutable.update { it.copy(liquidGlass = enabled) }
+    } } }
     /** 智能助手总开关：关闭后忽略外部语音指令，仅保留设置页入口。 */
     fun voiceAssistantEnabled(enabled: Boolean) { graph.scope.launch { action {
         mutable.update { it.copy(voiceAssistantEnabled = enabled) }

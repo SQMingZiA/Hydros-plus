@@ -16,6 +16,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.layout.*
@@ -53,6 +54,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -68,6 +70,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import org.cqutosp.hydros.ui.theme.LocalHydrosGradient
@@ -121,11 +124,14 @@ import org.cqutosp.hydros.ui.theme.fontSet
 import org.cqutosp.hydros.ui.theme.GradientPreset
 import androidx.activity.ComponentActivity
 import org.cqutosp.hydros.ui.components.LocalLiquidBackdrop
+import org.cqutosp.hydros.ui.components.LocalLiquidGlassEnabled
+import org.cqutosp.hydros.ui.components.drawLiquidDroplet
+import org.cqutosp.hydros.ui.components.drawLiquidFusion
+import org.cqutosp.hydros.ui.components.drawLiquidRipple
 import org.cqutosp.hydros.ui.components.capsulePath
 import org.cqutosp.hydros.ui.components.circlePath
-import org.cqutosp.hydros.ui.components.drawLiquidBackdrop
+import org.cqutosp.hydros.ui.components.drawLiquidGlassPanel
 import org.cqutosp.hydros.ui.components.drawLiquidGlassBallTint
-import org.cqutosp.hydros.ui.components.drawLiquidGlassTint
 import org.cqutosp.hydros.ui.components.LocalHydrosWallpaper
 import org.cqutosp.hydros.ui.components.WallpaperConfig
 import org.cqutosp.hydros.ui.state.AppIconController
@@ -453,7 +459,10 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
             }
         }
         // Each destination owns its chrome so both pages retain their own bars during a back gesture.
-        CompositionLocalProvider(LocalHydrosWallpaper provides hydrosWallpaper) {
+        CompositionLocalProvider(
+            LocalHydrosWallpaper provides hydrosWallpaper,
+            LocalLiquidGlassEnabled provides state.liquidGlass
+        ) {
         HydrosSnackbarProvider(snackbar, bottomPadding = if (destinations.any { it.route == route }) mainBarHeight else 0.dp) {
             HydrosNotificationEffects(state, updates, model::dismissMessage, model::refresh, model::loadMonth, appInfo::checkForUpdates, showUpdateErrors = route != "about/update",
                 announceSession = route != "session" || state.session?.let { state.working || it.stage in listOf(SessionStage.OPENING, SessionStage.STOPPING, SessionStage.SETTLING) } != true,
@@ -656,6 +665,8 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                     postSessionDestination = state.postSessionDestination, onPostSessionDestination = model::postSessionDestination,
                                     homeConnectCardVisible = state.homeConnectCardVisible,
                                     onHomeConnectCardVisible = model::homeConnectCardVisible,
+                                    liquidGlass = state.liquidGlass,
+                                    onLiquidGlass = model::liquidGlass,
                                     fontWeightStep = state.fontWeightStep,
                                     onFontWeightStep = model::fontWeightStep)
                             }
@@ -1046,7 +1057,7 @@ internal fun HomeWalletTabs(progress: Float, onSelect: (Int) -> Unit) {
     }
 }
 
-/** 液态玻璃底部导航：背景采样胶囊 + 选中弹簧动效 + 右下角扫码玻璃球。 */
+/** 液态玻璃底部导航：悬浮圆角玻璃基底 + 可拖动液滴药丸 + 相邻融合 + 扫码玻璃球。 */
 @Composable
 internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan: () -> Unit, onHeight: (Int) -> Unit) {
     val haptics = rememberHydrosHaptics()
@@ -1054,30 +1065,36 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
     val dark = isDarkScheme()
     val colors = MaterialTheme.colorScheme
     val backdrop = LocalLiquidBackdrop.current
+    val liquid = LocalLiquidGlassEnabled.current
     val barHeight = 52.dp
     val glassShape = RoundedCornerShape(999.dp)
     var capsuleOrigin by remember { mutableStateOf(Offset.Zero) }
     var fabOrigin by remember { mutableStateOf(Offset.Zero) }
-    // 玻璃的“奶感”：真实设备上再叠 blur，模拟器没有 RenderEffect 时也不会让底下文字清晰穿透。
-    val tintAlpha = if (dark) 0.34f else 0.70f
-    val tintTopAlpha = if (dark) 0.52f else 0.90f
-    val edgeLight = if (dark) Color.White.copy(alpha = 0.34f) else Color.White.copy(alpha = 0.86f)
-    val edgeShade = if (dark) Color.Black.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.10f)
-    // 扫码球也跟着主题色走：品牌色提亮做高光，偏紫做暗部，仍是 iOS 的渐变球。
-    val brand = colors.primary
-    val fabStart = lerp(brand, Color.White, if (dark) 0.16f else 0.34f)
-    val fabEnd = lerp(brand, Color(0xFF6C4CF6), 0.45f)
-    // iOS 液态玻璃的拖动切换：长按后按住胶囊左右拖动，松手切到目标页。
     var capsuleWidth by remember { mutableStateOf(0f) }
-    var dragX by remember { mutableStateOf(0f) }
+    val selectedIndex = destinations.indexOfFirst { it.route == route }.coerceAtLeast(0)
+    val scope = rememberCoroutineScope()
+    // 激活态是一个可以拖动的液滴：位置是连续的浮点数，松手后弹性吸附到最近的标签。
+    val droplet = remember { Animatable(selectedIndex.toFloat()) }
     var dragging by remember { mutableStateOf(false) }
-    var dragIndex by remember { mutableStateOf(-1) }
-    val capsuleLift by animateFloatAsState(
+    // 拖动时的连续位置：手势回调不是挂起函数，这里同步记录，画布直接读它。
+    var dragTarget by remember { mutableStateOf(selectedIndex.toFloat()) }
+    LaunchedEffect(route) {
+        if (!dragging) droplet.animateTo(selectedIndex.toFloat(), spring(dampingRatio = 0.62f, stiffness = 380f))
+    }
+    val lift by animateFloatAsState(
         targetValue = if (dragging) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 520f),
         label = "glass-lift"
     )
-    val activeIndex = if (dragging && dragIndex >= 0) dragIndex else destinations.indexOfFirst { it.route == route }
+    // 玻璃的透光率随拖动抬升变化：抬起时更透、投影更深，落下时收紧。
+    val position = if (dragging) dragTarget else droplet.value
+    val tintAlpha = (if (dark) 0.34f else 0.70f) - 0.06f * lift
+    val tintTopAlpha = (if (dark) 0.52f else 0.90f) - 0.04f * lift
+    val edgeLight = if (dark) Color.White.copy(alpha = 0.34f) else Color.White.copy(alpha = 0.86f)
+    val edgeShade = if (dark) Color.Black.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.10f)
+    val brand = colors.primary
+    val fabStart = lerp(brand, Color.White, if (dark) 0.16f else 0.34f)
+    val fabEnd = lerp(brand, Color(0xFF6C4CF6), 0.45f)
     Box(
         Modifier.fillMaxWidth()
             .onSizeChanged { onHeight(it.height + with(density) { 12.dp.roundToPx() }) }
@@ -1093,135 +1110,130 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
             Box(
                 Modifier.weight(1f).height(barHeight)
                     .graphicsLayer {
-                        val s = 1f + 0.018f * capsuleLift
+                        val s = 1f + 0.012f * lift
                         scaleX = s
                         scaleY = s
                     }
-                    .shadow(16.dp, glassShape)
+                    .shadow((12 + 8 * lift).dp, glassShape)
                     .clip(glassShape)
                     .onSizeChanged { capsuleWidth = it.width.toFloat() }
                     .onGloballyPositioned { capsuleOrigin = it.positionInWindow() }
                     .pointerInput(destinations) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = { offset ->
-                                dragX = offset.x
+                                val width = capsuleWidth.coerceAtLeast(1f)
+                                dragTarget = (offset.x / width * destinations.size - 0.5f).coerceIn(0f, destinations.lastIndex.toFloat())
                                 dragging = true
-                                dragIndex = (offset.x / capsuleWidth.coerceAtLeast(1f) * destinations.size)
-                                    .toInt().coerceIn(0, destinations.lastIndex)
                                 haptics.medium()
                             },
                             onDrag = { change, amount ->
                                 change.consume()
-                                dragX += amount.x
-                                val next = (dragX / capsuleWidth.coerceAtLeast(1f) * destinations.size)
-                                    .toInt().coerceIn(0, destinations.lastIndex)
-                                if (next != dragIndex) {
-                                    dragIndex = next
-                                    haptics.light()
-                                }
+                                val width = capsuleWidth.coerceAtLeast(1f)
+                                val next = (position + amount.x / width * destinations.size)
+                                    .coerceIn(0f, destinations.lastIndex.toFloat())
+                                dragTarget = next
                             },
                             onDragEnd = {
-                                val target = dragIndex
                                 dragging = false
-                                dragIndex = -1
-                                if (target >= 0 && target <= destinations.lastIndex &&
-                                    destinations[target].route != route
-                                ) {
-                                    haptics.medium()
-                                    onNavigate(destinations[target].route)
+                                val target = dragTarget.roundToInt().coerceIn(0, destinations.lastIndex)
+                                scope.launch {
+                                    droplet.snapTo(dragTarget)
+                                    droplet.animateTo(target.toFloat(), spring(dampingRatio = 0.55f, stiffness = 420f))
+                                    if (destinations[target].route != route) {
+                                        haptics.medium()
+                                        onNavigate(destinations[target].route)
+                                    }
                                 }
                             },
                             onDragCancel = {
                                 dragging = false
-                                dragIndex = -1
+                                scope.launch { droplet.animateTo(selectedIndex.toFloat(), spring(dampingRatio = 0.6f, stiffness = 400f)) }
                             }
                         )
                     }
             ) {
-                // 真实液态玻璃：先把页面内容录进采样层，再对“只画采样层”的盒子做 blur，
-                // 最后叠一层不模糊的染色/高光，得到 iOS 那种被磨砂过的透光玻璃。
-                Box(
-                    Modifier.matchParentSize()
-                        .blur(18.dp, if (Build.VERSION.SDK_INT >= 33) BlurredEdgeTreatment.Unbounded else BlurredEdgeTreatment.Rectangle)
-                ) {
-                    Canvas(Modifier.matchParentSize()) {
-                        drawLiquidBackdrop(backdrop, capsuleOrigin, capsulePath(size.width, size.height))
-                    }
-                }
                 Canvas(Modifier.matchParentSize()) {
-                    val path = capsulePath(size.width, size.height)
-                    drawLiquidGlassTint(
-                        shape = path,
-                        tint = Color.White.copy(alpha = tintAlpha),
-                        tintTop = Color.White.copy(alpha = tintTopAlpha),
-                        edgeLight = edgeLight,
-                        edgeShade = edgeShade,
-                        brandGlow = brand.copy(alpha = if (dark) 0.10f else 0.07f)
+                    val w = size.width
+                    val h = size.height
+                    drawLiquidGlassPanel(
+                        state = backdrop,
+                        origin = capsuleOrigin,
+                        shape = capsulePath(w, h),
+                        dark = dark,
+                        liquid = liquid,
+                        magnify = 1.05f
                     )
+                    val tabWidth = w / destinations.size
+                    val pillWidth = tabWidth * 0.78f
+                    val pillHeight = h * 0.74f
+                    val pillTop = (h - pillHeight) / 2f
+                    val pillLeft = (position + 0.5f) * tabWidth - pillWidth / 2f
+                    // 液滴与相邻按钮的融合：距离越近，中间的液桥越粗。
+                    destinations.indices.forEach { index ->
+                        val d = kotlin.math.abs(position - index)
+                        if (d < 0.62f) {
+                            val strength = ((0.62f - d) / 0.62f).let { it * it }
+                            val edge = if (index < position) pillLeft else pillLeft + pillWidth
+                            drawLiquidFusion(edge, (index + 0.5f) * tabWidth, h / 2f, pillHeight, strength * (0.45f + 0.55f * lift), dark)
+                        }
+                    }
+                    drawLiquidDroplet(
+                        left = pillLeft,
+                        top = pillTop,
+                        width = pillWidth,
+                        height = pillHeight,
+                        dark = dark,
+                        glow = lift,
+                        state = backdrop,
+                        origin = capsuleOrigin
+                    )
+                    if (lift > 0.01f) {
+                        destinations.indices.forEach { index ->
+                            val d = kotlin.math.abs(position - index)
+                            val strength = (1f - d / 0.5f).coerceIn(0f, 1f) * lift
+                            drawLiquidRipple((index + 0.5f) * tabWidth, h / 2f, pillHeight, strength, dark)
+                        }
+                    }
                 }
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                     destinations.forEachIndexed { index, destination ->
-                        val selected = activeIndex == index
                         val pressSource = remember { MutableInteractionSource() }
                         val pressed by pressSource.collectIsPressedAsState()
                         val pressGlow by animateFloatAsState(
-                            targetValue = if (pressed || (dragging && dragIndex == index)) 1f else 0f,
+                            targetValue = if (pressed) 1f else 0f,
                             animationSpec = spring(dampingRatio = 0.7f, stiffness = 700f),
                             label = "tab-press-" + destination.route
                         )
-                        val scale by animateFloatAsState(
-                            targetValue = if (selected) 1f else 0f,
-                            animationSpec = spring(dampingRatio = 0.52f, stiffness = 360f),
-                            label = "tab-" + destination.route
-                        )
+                        // 药丸掠过时，图标被“挤”成胶囊形状（横向压扁、纵向拉长），并轻微上浮。
+                        val prox = if (dragging) {
+                            kotlin.math.exp(-((position - index) * (position - index)) / 0.06f)
+                        } else if (index == selectedIndex) 1f else 0f
+                        val selected = if (dragging) {
+                            kotlin.math.abs(position - index) < 0.5f
+                        } else index == selectedIndex
                         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                            Box(
-                                Modifier.fillMaxWidth(0.82f).height(40.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // 选中内胆：iOS 的“玻璃里再压一块更亮的玻璃”，只随选中进度淡入。
+                            Box(Modifier.fillMaxWidth(0.82f).height(40.dp), contentAlignment = Alignment.Center) {
                                 Box(
                                     Modifier
                                         .matchParentSize()
-                                        .graphicsLayer {
-                                            scaleX = 0.9f + 0.1f * scale
-                                            scaleY = 0.9f + 0.1f * scale
-                                            alpha = scale
-                                        }
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(
-                                            Brush.verticalGradient(
-                                                listOf(
-                                                    Color.White.copy(alpha = if (dark) 0.16f else 0.62f),
-                                                    Color.White.copy(alpha = if (dark) 0.10f else 0.42f)
-                                                )
-                                            )
-                                        )
-                                        .border(
-                                            0.8.dp,
-                                            Color.White.copy(alpha = if (dark) 0.22f else 0.72f),
-                                            RoundedCornerShape(999.dp)
-                                        )
-                                )
-                                // 按下的“液态”反馈：接触点扩散一圈柔光，松手回弹。
-                                Box(
-                                    Modifier
-                                        .matchParentSize()
-                                        .graphicsLayer { alpha = pressGlow * 0.55f }
+                                        .graphicsLayer { alpha = pressGlow * 0.5f }
                                         .clip(RoundedCornerShape(999.dp))
                                         .background(
                                             Brush.radialGradient(
-                                                listOf(
-                                                    Color.White.copy(alpha = if (dark) 0.26f else 0.55f),
-                                                    Color.Transparent
-                                                )
+                                                listOf(Color.White.copy(alpha = if (dark) 0.26f else 0.62f), Color.Transparent)
                                             )
                                         )
                                 )
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.graphicsLayer {
+                                        // 只做极轻微的上浮，图标本身不缩放，避免被拉伸变形。
+                                        translationY = -1.dp.toPx() * prox
+                                    }
+                                ) {
                                     Glyph(
                                         if (selected) destination.icon else destination.iconOutline,
-                                        modifier = Modifier.size((21 + 2 * scale).dp),
+                                        modifier = Modifier.size(21.dp),
                                         tint = if (selected) colors.primary else colors.onSurfaceVariant,
                                         description = destination.label
                                     )
@@ -1235,11 +1247,16 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                             }
                             Box(
                                 Modifier.matchParentSize().clip(RoundedCornerShape(999.dp)).selectable(
-                                    selected = selected,
+                                    selected = index == selectedIndex,
                                     interactionSource = pressSource,
                                     indication = null,
                                     role = Role.Tab,
-                                    onClick = { if (route != destination.route) { haptics.medium(); onNavigate(destination.route) } }
+                                    onClick = {
+                                        if (route != destination.route) {
+                                            haptics.medium()
+                                            onNavigate(destination.route)
+                                        }
+                                    }
                                 )
                             )
                         }
@@ -1275,14 +1292,6 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                     .testTag("scan-action"),
                 contentAlignment = Alignment.Center
             ) {
-                Box(
-                    Modifier.matchParentSize()
-                        .blur(14.dp, if (Build.VERSION.SDK_INT >= 33) BlurredEdgeTreatment.Unbounded else BlurredEdgeTreatment.Rectangle)
-                ) {
-                    Canvas(Modifier.matchParentSize()) {
-                        drawLiquidBackdrop(backdrop, fabOrigin, circlePath(center, size.minDimension / 2f))
-                    }
-                }
                 Canvas(Modifier.matchParentSize()) {
                     drawLiquidGlassBallTint(
                         shape = circlePath(center, size.minDimension / 2f),
@@ -1290,7 +1299,9 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
                         radius = size.minDimension / 2f,
                         brandStart = fabStart,
                         brandEnd = fabEnd,
-                        dark = dark
+                        dark = dark,
+                        state = backdrop,
+                        origin = fabOrigin
                     )
                 }
                 Box(
@@ -1308,59 +1319,6 @@ internal fun HydrosBottomBar(route: String, onNavigate: (String) -> Unit, onScan
             }
         }
     }
-}
-
-/**
- * 底部导航玻璃的“背景采样”：把页面同一套渐变光斑按导航栏位置偏移后画进胶囊，
- * 再交给 blur 模糊，形成透出页面色彩的液体玻璃。关闭渐变时只保留淡品牌色。
- */
-private fun DrawScope.drawGlassSample(
-    preset: GradientPreset,
-    enabled: Boolean,
-    dark: Boolean,
-    parallax: Offset,
-) {
-    val w = size.width
-    val h = size.height
-    drawRect(if (dark) IosTokens.PageDark else IosTokens.HomePage)
-    if (!enabled) {
-        drawRect(
-            Brush.verticalGradient(
-                listOf(preset.start.copy(alpha = if (dark) 0.10f else 0.06f), Color.Transparent)
-            )
-        )
-        return
-    }
-    drawRect(
-        Brush.verticalGradient(
-            listOf(
-                preset.start.copy(alpha = if (dark) 0.30f else 0.20f),
-                preset.end.copy(alpha = if (dark) 0.14f else 0.08f),
-                Color.Transparent
-            )
-        )
-    )
-    drawGlassBlob(preset.blobMint, w * 0.12f + parallax.x, -h * 0.25f + parallax.y, w * 0.95f, if (dark) 0.55f else 0.90f)
-    drawGlassBlob(preset.blobSky, w * 0.80f + parallax.x, h * 0.15f + parallax.y, w * 0.85f, if (dark) 0.48f else 0.80f)
-    drawGlassBlob(preset.blobLilac, w * 0.50f + parallax.x, h * 1.20f + parallax.y, w * 0.85f, if (dark) 0.34f else 0.55f)
-}
-
-private fun DrawScope.drawGlassBlob(
-    color: Color,
-    cx: Float,
-    cy: Float,
-    radius: Float,
-    alpha: Float,
-) {
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(color.copy(alpha = alpha), Color.Transparent),
-            center = Offset(cx, cy),
-            radius = radius
-        ),
-        radius = radius,
-        center = Offset(cx, cy)
-    )
 }
 
 /** 底部“充值”标签页的内容：余额 + 套餐 + 支付方式，并处理支付跳转。 */

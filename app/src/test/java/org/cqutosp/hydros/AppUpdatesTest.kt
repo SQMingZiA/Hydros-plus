@@ -69,4 +69,40 @@ class AppUpdatesTest {
             assertTrue(runCatching { source.latest() }.isFailure)
         } finally { server.close() }
     }
+
+    @Test fun parsesGiteeReleaseAndFallsBackToHistoryList() = runTest {
+        val server = MockWebServer(); server.start()
+        try {
+            val gitee = GiteeAppUpdates(apiBase = server.url("/api").toString())
+            server.enqueue(MockResponse.Builder().body("""{"tag_name":"v1.1.8","name":"Hydros+ 1.1.8","body":"说明","assets":[{"name":"app.apk","size":10,"browser_download_url":"https://gitee.com/sqmingzia/Hydros-plus/releases/download/v1.1.8/app.apk"}]}""").build())
+            val release = gitee.latest()!!
+            assertEquals("1.1.8", release.version)
+            assertEquals("Hydros+ 1.1.8", release.name)
+            assertEquals(1, release.assets.size)
+            assertEquals("/api/releases/latest", server.takeRequest().target)
+            // Gitee 的 latest 在还没有正式版时返回 404，此时退回 release 列表的第一条。
+            server.enqueue(MockResponse.Builder().code(404).build())
+            server.enqueue(MockResponse.Builder().body("""[{"tag_name":"v1.1.7","name":"Hydros+ 1.1.7"}]""").build())
+            assertEquals("1.1.7", gitee.latest()!!.version)
+            assertEquals("/api/releases/latest", server.takeRequest().target)
+            assertEquals("/api/releases?per_page=30&page=1&direction=desc", server.takeRequest().target)
+        } finally { server.close() }
+    }
+
+    @Test fun defaultSourcePrefersGitHubAndFallsBackToGitee() = runTest {
+        val giteeRelease = AppRelease("1.1.8", "v1.1.8", "notes")
+        val githubDown = object : AppUpdateSource {
+            override suspend fun latest(): AppRelease? = throw java.io.IOException("offline")
+            override suspend fun history(page: Int) = ReleasePage(emptyList(), false)
+            override suspend fun release(tag: String): AppRelease? = null
+        }
+        val giteeUp = object : AppUpdateSource {
+            override suspend fun latest(): AppRelease? = giteeRelease
+            override suspend fun history(page: Int) = ReleasePage(listOf(giteeRelease), false)
+            override suspend fun release(tag: String): AppRelease? = giteeRelease
+        }
+        val source = DefaultAppUpdates(github = githubDown, gitee = giteeUp)
+        assertEquals(giteeRelease, source.latest())
+        assertEquals(listOf("1.1.8"), source.history(1).releases.map { it.version })
+    }
 }

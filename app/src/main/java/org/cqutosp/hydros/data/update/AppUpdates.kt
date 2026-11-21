@@ -19,11 +19,17 @@ import okhttp3.Request
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-// 更新通道指向本项目的独立仓库（Hydros+），不再跟随上游 Hydros 的 release。
+// 正式仓库与 Releases 都在 GitHub（Hydros+），Gitee 仅作同步镜像。
 const val HYDROS_GITHUB_REPO = "SQMingZiA/Hydros-plus"
 const val HYDROS_REPOSITORY = "https://github.com/$HYDROS_GITHUB_REPO"
 const val HYDROS_RELEASES = "$HYDROS_REPOSITORY/releases"
 private const val HYDROS_RELEASE_DOWNLOAD_PREFIX = "$HYDROS_RELEASES/download/"
+
+const val HYDROS_GITEE_REPO = "sqmingzia/Hydros-plus"
+const val HYDROS_GITEE = "https://gitee.com/$HYDROS_GITEE_REPO"
+const val HYDROS_GITEE_RELEASES = "$HYDROS_GITEE/releases"
+const val HYDROS_GITEE_API = "https://gitee.com/api/v5/repos/$HYDROS_GITEE_REPO"
+private const val HYDROS_GITEE_DOWNLOAD_PREFIX = "$HYDROS_GITEE_RELEASES/download/"
 
 data class ReleaseAsset(val name: String, val url: String, val size: Long, val sha256: String?)
 
@@ -100,13 +106,106 @@ class GitHubAppUpdates(
     }
 }
 
+/**
+ * 备用更新源：Gitee 的 releases API（GitHub 不可用时兜底）。接口结构与 GitHub 接近，但资源下载地址前缀不同，
+ * 因此解析时两种前缀都接受。
+ */
+class GiteeAppUpdates(
+    private val client: OkHttpClient = OkHttpClient.Builder().retryOnConnectionFailure(false).callTimeout(15, TimeUnit.SECONDS).build(),
+    private val apiBase: String = HYDROS_GITEE_API,
+) : AppUpdateSource {
+    override suspend fun latest(): AppRelease? = withContext(Dispatchers.IO) {
+        request("$apiBase/releases/latest", allowMissing = true)
+            ?.let { parseUpdateData { parseRelease(it.jsonObject) } }
+            ?: history(1).releases.firstOrNull()
+    }
+
+    override suspend fun history(page: Int): ReleasePage = withContext(Dispatchers.IO) {
+        require(page > 0)
+        val entries = parseUpdateData {
+            request("$apiBase/releases?per_page=30&page=$page&direction=desc")?.jsonArray
+        } ?: JsonArray(emptyList())
+        ReleasePage(entries.mapNotNull { parseUpdateData { parseRelease(it.jsonObject) } }, entries.size == 30)
+    }
+
+    override suspend fun release(tag: String): AppRelease? = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(tag, "UTF-8").replace("+", "%20")
+        request("$apiBase/releases/tags/$encoded", allowMissing = true)
+            ?.let { parseUpdateData { parseRelease(it.jsonObject) } }
+    }
+
+    private suspend fun request(url: String, allowMissing: Boolean = false): JsonElement? = retryReadQuery { budget ->
+        budget.attempt {
+            val request = Request.Builder().url(url)
+                .header("Accept", "application/json")
+                .header("User-Agent", "HydrosPlus-Android").build()
+            suspendCancellableCoroutine { continuation ->
+                val call = client.newCall(request)
+                continuation.invokeOnCancellation { call.cancel() }
+                call.enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (continuation.isActive) continuation.resumeWithException(e)
+                    }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        response.use {
+                            if (!continuation.isActive) return
+                            try {
+                                val result = when {
+                                    allowMissing && response.code == 404 -> null
+                                    transientHttpStatus(response.code) -> throw QueryHttpFailure(
+                                        response.code,
+                                        response.header("Retry-After")?.toLongOrNull()?.takeIf { it in 0..3 }?.times(1_000)
+                                            ?: response.header("Retry-After")?.let { Long.MAX_VALUE }
+                                    )
+                                    !response.isSuccessful -> throw AppFailure(FailureOperation.UPDATE, FailureStage.RESPONSE, FailureReason.REJECTED)
+                                    else -> parseUpdateData { Json.parseToJsonElement(response.body.string()) }
+                                }
+                                if (continuation.isActive) continuation.resume(result)
+                            } catch (error: Exception) {
+                                if (continuation.isActive) continuation.resumeWithException(error)
+                            }
+                        }
+                    }
+                })
+            }
+        }
+    }
+}
+
+/**
+ * GitHub 优先、Gitee 兜底：正式仓库与发布都在 GitHub，Gitee 只是同步镜像，
+ * 两个都失败才把异常抛给界面。
+ */
+class DefaultAppUpdates(
+    private val github: AppUpdateSource = GitHubAppUpdates(),
+    private val gitee: AppUpdateSource = GiteeAppUpdates(),
+) : AppUpdateSource {
+    override suspend fun latest(): AppRelease? {
+        val primary = try { github.latest() } catch (error: Exception) { null }
+        primary?.let { return it }
+        return gitee.latest()
+    }
+
+    override suspend fun history(page: Int): ReleasePage = try {
+        github.history(page).takeIf { it.releases.isNotEmpty() } ?: gitee.history(page)
+    } catch (error: Exception) {
+        gitee.history(page)
+    }
+
+    override suspend fun release(tag: String): AppRelease? {
+        val primary = try { github.release(tag) } catch (error: Exception) { null }
+        return primary ?: gitee.release(tag)
+    }
+}
+
 private inline fun <T> parseUpdateData(block: () -> T): T = try { block() }
 catch (error: AppFailure) { throw error }
 catch (error: IllegalArgumentException) { throw AppFailure(FailureOperation.UPDATE, FailureStage.RESPONSE, FailureReason.INVALID_DATA, error) }
 
 internal fun parseRelease(json: JsonObject): AppRelease? {
-    if (json["draft"]?.jsonPrimitive?.booleanOrNull != false ||
-        json["prerelease"]?.jsonPrimitive?.booleanOrNull != false) return null
+    if (json["draft"]?.jsonPrimitive?.booleanOrNull == true ||
+        json["prerelease"]?.jsonPrimitive?.booleanOrNull == true) return null
     val tag = json["tag_name"]?.jsonPrimitive?.contentOrNull ?: throw AppFailure(FailureOperation.UPDATE, FailureStage.RESPONSE, FailureReason.INVALID_DATA)
     val version = tag.removePrefix("v")
     if (!Regex("[0-9]+\\.[0-9]+\\.[0-9]+").matches(version)) throw AppFailure(FailureOperation.UPDATE, FailureStage.RESPONSE, FailureReason.INVALID_DATA)
@@ -114,7 +213,8 @@ internal fun parseRelease(json: JsonObject): AppRelease? {
         val asset = element.jsonObject
         val name = asset["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
         val url = asset["browser_download_url"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-        if (!name.endsWith(".apk", ignoreCase = true) || !url.startsWith(HYDROS_RELEASE_DOWNLOAD_PREFIX)) return@mapNotNull null
+        val hosted = url.startsWith(HYDROS_RELEASE_DOWNLOAD_PREFIX) || url.startsWith(HYDROS_GITEE_DOWNLOAD_PREFIX)
+        if (!name.endsWith(".apk", ignoreCase = true) || !hosted) return@mapNotNull null
         ReleaseAsset(name, url, asset["size"]?.jsonPrimitive?.longOrNull ?: 0,
             asset["digest"]?.jsonPrimitive?.contentOrNull?.takeIf { it.matches(Regex("sha256:[a-fA-F0-9]{64}")) }?.substringAfter(':'))
     }

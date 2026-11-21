@@ -37,7 +37,7 @@ import javax.crypto.spec.SecretKeySpec
     val waterLimitNotifiedMonth: String? = null, val avatarPath: String? = null, val demoMode: Boolean = false,
     val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null, val wallpaperDim: Float = 0.0f, val wallpaperBlur: Float = 0.0f,
-    val voiceAssistantEnabled: Boolean = false)
+    val voiceAssistantEnabled: Boolean = false, /** 底部导航是否启用液态玻璃（折射+模糊），关闭后改为普通磨砂。 */ val liquidGlass: Boolean = true)
 interface HydrosStore {
     suspend fun credentials(): Credentials?
     suspend fun credentials(value: Credentials?)
@@ -71,6 +71,9 @@ interface HydrosStore {
     /** 智能助手：允许语音助手通过快捷指令/深链打开设备、查询余额与消费。 */
     suspend fun voiceAssistantEnabled(): Boolean = false
     suspend fun voiceAssistantEnabled(value: Boolean) {}
+    /** 底部导航的液态玻璃效果开关，关闭后使用普通磨砂质感。 */
+    suspend fun liquidGlass(): Boolean = true
+    suspend fun liquidGlass(value: Boolean) {}
     /** 自定义头像在应用私有目录里的绝对路径，null 表示使用默认头像。 */
     suspend fun fontWeightStep(): Int = 0
     suspend fun fontWeightStep(value: Int) {}
@@ -190,6 +193,8 @@ class PreferencesHydrosStore(context: Context) : HydrosStore {
     override suspend fun demoMode(value: Boolean) { edit { it.copy(demoMode = value) } }
     override suspend fun voiceAssistantEnabled() = read().voiceAssistantEnabled
     override suspend fun voiceAssistantEnabled(value: Boolean) { edit { it.copy(voiceAssistantEnabled = value) } }
+    override suspend fun liquidGlass() = read().liquidGlass
+    override suspend fun liquidGlass(value: Boolean) { edit { it.copy(liquidGlass = value) } }
     override suspend fun fontWeightStep() = read().fontWeightStep
     override suspend fun fontWeightStep(value: Int) { edit { it.copy(fontWeightStep = value) } }
     override suspend fun avatarPath() = read().avatarPath

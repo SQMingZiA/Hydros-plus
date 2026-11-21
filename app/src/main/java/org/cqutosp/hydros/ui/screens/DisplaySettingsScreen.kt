@@ -27,6 +27,7 @@ import kotlin.math.roundToInt
 fun DisplaySettingsScreen(savedScale: Float, onPreview: (Float?) -> Unit, onSave: suspend (Float) -> Boolean,
     postSessionDestination: PostSessionDestination, onPostSessionDestination: (PostSessionDestination) -> Unit,
     homeConnectCardVisible: Boolean = true, onHomeConnectCardVisible: (Boolean) -> Unit = {},
+    liquidGlass: Boolean = true, onLiquidGlass: (Boolean) -> Unit = {},
     fontWeightStep: Int = 0, onFontWeightStep: (Int) -> Unit = {}) {
     val options = FontSizeOption.entries
     var draft by remember(savedScale) { mutableFloatStateOf(savedScale) }
@@ -44,6 +45,15 @@ fun DisplaySettingsScreen(savedScale: Float, onPreview: (Float?) -> Unit, onSave
                 checked = homeConnectCardVisible,
                 onCheckedChange = onHomeConnectCardVisible,
                 icon = R.drawable.ic_scan
+            )
+        }
+        Section("底部导航") {
+            SwitchRow(
+                title = "液态玻璃",
+                supporting = "关闭后底栏改为普通磨砂质感",
+                checked = liquidGlass,
+                onCheckedChange = onLiquidGlass,
+                icon = R.drawable.ic_water
             )
         }
         Section("字体大小") {
