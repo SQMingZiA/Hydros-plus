@@ -512,7 +512,7 @@ fun HydrosPage(
     LaunchedEffect(backdrop) {
         delay(120)
         while (true) {
-            runCatching { backdrop.captureBlurred(backdropLayer, downsample = 8) }
+            runCatching { backdrop.captureBlurred(backdropLayer, downsample = 12) }
             delay(600)
         }
     }

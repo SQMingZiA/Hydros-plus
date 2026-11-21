@@ -320,9 +320,9 @@ fun DrawScope.drawLiquidGlassPanel(
             drawBackdropImage(state, origin, magnify, pivot)
             drawRect(
                 brush = Brush.verticalGradient(
-                    0f to Color.White.copy(alpha = if (dark) 0.20f else 0.40f),
-                    0.5f to Color.White.copy(alpha = if (dark) 0.13f else 0.26f),
-                    1f to Color.White.copy(alpha = if (dark) 0.08f else 0.18f)
+                    0f to Color.White.copy(alpha = if (dark) 0.30f else 0.56f),
+                    0.5f to Color.White.copy(alpha = if (dark) 0.22f else 0.44f),
+                    1f to Color.White.copy(alpha = if (dark) 0.16f else 0.34f)
                 ),
                 size = size
             )
