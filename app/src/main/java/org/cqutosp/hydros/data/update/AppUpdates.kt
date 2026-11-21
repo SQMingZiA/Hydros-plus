@@ -174,28 +174,35 @@ class GiteeAppUpdates(
 }
 
 /**
- * GitHub 优先、Gitee 兜底：正式仓库与发布都在 GitHub，Gitee 只是同步镜像，
- * 两个都失败才把异常抛给界面。
+ * 按用户选定的更新源优先检查，另一个源兜底；两个都失败才把异常抛给界面。
+ * 默认 Gitee（国内更稳），用户可以在「软件更新 → 更多信息 → 更新源」里切换。
  */
 class DefaultAppUpdates(
-    private val github: AppUpdateSource = GitHubAppUpdates(),
+    private val source: () -> UpdateSource = { UpdateSource.GITEE },
     private val gitee: AppUpdateSource = GiteeAppUpdates(),
+    private val github: AppUpdateSource = GitHubAppUpdates(),
 ) : AppUpdateSource {
+    private fun primary(): AppUpdateSource =
+        if (source() == UpdateSource.GITHUB) github else gitee
+
+    private fun fallback(): AppUpdateSource =
+        if (source() == UpdateSource.GITHUB) gitee else github
+
     override suspend fun latest(): AppRelease? {
-        val primary = try { github.latest() } catch (error: Exception) { null }
-        primary?.let { return it }
-        return gitee.latest()
+        val first = try { primary().latest() } catch (error: Exception) { null }
+        first?.let { return it }
+        return fallback().latest()
     }
 
     override suspend fun history(page: Int): ReleasePage = try {
-        github.history(page).takeIf { it.releases.isNotEmpty() } ?: gitee.history(page)
+        primary().history(page).takeIf { it.releases.isNotEmpty() } ?: fallback().history(page)
     } catch (error: Exception) {
-        gitee.history(page)
+        fallback().history(page)
     }
 
     override suspend fun release(tag: String): AppRelease? {
-        val primary = try { github.release(tag) } catch (error: Exception) { null }
-        return primary ?: gitee.release(tag)
+        val first = try { primary().release(tag) } catch (error: Exception) { null }
+        return first ?: fallback().release(tag)
     }
 }
 

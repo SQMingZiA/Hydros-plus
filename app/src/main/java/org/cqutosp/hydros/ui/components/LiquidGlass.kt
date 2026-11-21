@@ -165,7 +165,6 @@ fun DrawScope.drawLiquidGlassBallTint(
     origin: Offset = Offset.Zero,
 ) {
     clipPath(shape) {
-        drawBackdropImage(state, origin, magnify = 1.28f, pivot = center)
         drawRect(
             brush = Brush.radialGradient(
                 colors = listOf(
@@ -317,7 +316,15 @@ fun DrawScope.drawLiquidGlassPanel(
     val pivot = Offset(size.width / 2f, size.height / 2f)
     clipPath(shape) {
         if (liquid) {
-            drawBackdropImage(state, origin, magnify, pivot)
+            // 只用叠层模拟玻璃厚度与透光，不再把页面位图贴进来：
+            // 采样位图在低端机/模拟器上会放大出颗粒纹理与残影，反而脏。
+            drawRect(
+                brush = Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = if (dark) 0.10f else 0.20f),
+                    1f to Color.White.copy(alpha = 0f)
+                ),
+                size = size
+            )
             drawRect(
                 brush = Brush.verticalGradient(
                     0f to Color.White.copy(alpha = if (dark) 0.30f else 0.56f),
@@ -408,13 +415,6 @@ fun DrawScope.drawLiquidDroplet(
     )
     val body = Path().apply { addRoundRect(rect) }
     clipPath(body) {
-        // 药丸是整块玻璃最“厚”的地方：1.35 倍放大 + 强模糊，像一颗液滴透镜。
-        drawBackdropImage(
-            state = state,
-            origin = origin,
-            magnify = 1.35f,
-            pivot = Offset(left + width / 2f, top + height / 2f)
-        )
         drawRect(
             brush = Brush.verticalGradient(
                 0f to Color.White.copy(alpha = if (dark) 0.22f else 0.54f),

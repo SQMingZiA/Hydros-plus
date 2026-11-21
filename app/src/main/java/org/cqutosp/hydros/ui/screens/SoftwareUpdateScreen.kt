@@ -33,6 +33,8 @@ fun SoftwareUpdateScreen(
     onContinue: () -> Unit = {},
     onCancel: () -> Unit = {},
     onCheck: () -> Unit,
+    updateSource: UpdateSource = UpdateSource.GITEE,
+    onOpenUpdateSource: () -> Unit = {},
 ) {
     val uri = LocalUriHandler.current
     val release = updates.release
@@ -193,8 +195,43 @@ fun SoftwareUpdateScreen(
         Section("更多信息") {
             MineRow("更新历史", icon = R.drawable.ic_history, tone = IconTone.PRIMARY, onClick = onHistory)
             SubtleDivider()
+            MineRow("更新源", supporting = updateSource.label, icon = R.drawable.ic_refresh,
+                onClick = onOpenUpdateSource, trailing = { Glyph(R.drawable.ic_chevron, Modifier.size(16.dp)) })
+            SubtleDivider()
             MineRow("源代码仓库", supporting = HYDROS_GITHUB_REPO, icon = R.drawable.ic_code,
                 onClick = { uri.openUri(HYDROS_REPOSITORY) }, trailing = { Glyph(R.drawable.ic_open_in_new, Modifier.size(18.dp)) })
+        }
+    }
+}
+
+/** 更新源切换页：Gitee（默认）与 GitHub，选择后立刻生效。 */
+@Composable
+fun UpdateSourceScreen(selected: UpdateSource, onSelect: (UpdateSource) -> Unit) {
+    PageColumn {
+        Section("更新源") {
+            UpdateSource.entries.forEachIndexed { index, source ->
+                if (index > 0) SubtleDivider()
+                RadioRow(
+                    title = source.label,
+                    selected = source == selected,
+                    supporting = source.summary,
+                    onClick = { onSelect(source) },
+                )
+            }
+        }
+        Section("说明") {
+            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Gitee 由作者从 GitHub 自动同步，国内访问更稳定；GitHub 是官方仓库，发布最及时。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "切换后立即生效，下次检查更新会用新的源；当前源不可用时仍会自动回退到另一个源。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

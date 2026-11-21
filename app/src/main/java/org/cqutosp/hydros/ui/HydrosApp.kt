@@ -790,7 +790,14 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                     onContinue = { appInfo.continueInstall { intent ->
                                         if (runCatching { context.startActivity(intent) }.isFailure) appInfo.restoreUpdateLaunchIntent(intent)
                                     } },
-                                    onCancel = appInfo::cancelInstall, onCheck = appInfo::checkForUpdates)
+                                    onCancel = appInfo::cancelInstall, onCheck = appInfo::checkForUpdates,
+                                    updateSource = state.updateSource,
+                                    onOpenUpdateSource = { openPage("about/update-source") })
+                            }
+                        }
+                        composable("about/update-source") {
+                            HydrosPage("更新源", onBack = { back() }) {
+                                UpdateSourceScreen(state.updateSource, onSelect = model::updateSource)
                             }
                         }
                         composable("about/releases") {

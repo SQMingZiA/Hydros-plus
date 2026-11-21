@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import org.cqutosp.hydros.data.HydrosDependencies
 import org.cqutosp.hydros.data.network.*
 import org.cqutosp.hydros.data.repository.ReauthenticationNotice
+import org.cqutosp.hydros.data.update.UpdateSource
+import org.cqutosp.hydros.data.update.UpdateSourceSetting
 import org.cqutosp.hydros.data.repository.BillHistory
 import org.cqutosp.hydros.data.repository.DevicePreparation
 import org.cqutosp.hydros.data.repository.NearbyDiscovery
@@ -48,7 +50,9 @@ data class HydrosUiState(val initializing: Boolean = true, val signedIn: Boolean
     val accentColor: Long? = null, val wallpaperPath: String? = null,
     val wallpaperDim: Float = 0f, val wallpaperBlur: Float = 0f,
     /** 上次登录的账号（脱敏前的手机号），用于登录页回填，避免升级/重新登录时还要手打账号。 */
-    val lastAccount: String? = null)
+    val lastAccount: String? = null,
+    /** 用户选的更新源（默认 Gitee 镜像）。 */
+    val updateSource: UpdateSource = UpdateSource.GITEE)
 class HydrosViewModel(
     val graph: HydrosDependencies,
 ) : ViewModel() {
@@ -136,7 +140,8 @@ class HydrosViewModel(
                 val wallpaperDim = runCatching { graph.store.wallpaperDim() }.getOrDefault(0f)
                 val wallpaperBlur = runCatching { graph.store.wallpaperBlur() }.getOrDefault(0f)
                 val lastAccount = runCatching { graph.store.lastAccount() }.getOrNull()
-                mutable.update { it.copy(theme=theme, onboardingCompleted=onboarding, feedback=feedback,
+                val updateSource = UpdateSourceSetting.current()
+                mutable.update { it.copy(theme=theme, onboardingCompleted=onboarding, feedback=feedback, updateSource=updateSource,
                     fontSizeScale=fontSizeScale, postSessionDestination=postSessionDestination,
                     homeConnectCardVisible=homeConnectCardVisible, waterLimitCents=waterLimitCents,
                     waterLimitNotifiedMonth=notified, avatarPath=avatarPath, fontFamily=fontFamily,
@@ -353,6 +358,13 @@ class HydrosViewModel(
         } }
     }
     /** 底部导航液态玻璃开关：关闭后改为普通磨砂质感。 */
+    /** 切换更新源：立刻生效，下次检查更新就用新源。 */
+    fun updateSource(source: UpdateSource) {
+        UpdateSourceSetting.set(source)
+        HydrosLog.log("update", "更新源切换为 " + source.label)
+        mutable.update { it.copy(updateSource = source) }
+    }
+
     fun liquidGlass(enabled: Boolean) { graph.scope.launch { action {
         graph.store.liquidGlass(enabled)
         mutable.update { it.copy(liquidGlass = enabled) }

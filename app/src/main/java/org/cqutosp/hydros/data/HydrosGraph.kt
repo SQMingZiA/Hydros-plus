@@ -22,6 +22,7 @@ import org.cqutosp.hydros.service.SessionWatchService
 import org.cqutosp.hydros.data.update.AppInstaller
 import org.cqutosp.hydros.data.update.AppUpdateSource
 import org.cqutosp.hydros.data.update.DefaultAppUpdates
+import org.cqutosp.hydros.data.update.UpdateSourceSetting
 import org.cqutosp.hydros.data.update.AndroidUpdateManager
 import androidx.camera.camera2.Camera2Config
 import androidx.camera.core.CameraSelector
@@ -57,8 +58,10 @@ class HydrosDependencies(
 open class HydrosApplication : Application(), CameraXConfig.Provider {
     lateinit var dependencies: HydrosDependencies
         internal set
-    // 更新检查默认走 GitHub（正式发布源），失败时自动回退 Gitee 镜像。
-    open val appUpdates: AppUpdateSource by lazy { DefaultAppUpdates() }
+    // 更新检查按用户在「更新源」里的选择优先，另一个源自动兜底（默认 Gitee）。
+    open val appUpdates: AppUpdateSource by lazy {
+        DefaultAppUpdates(source = { UpdateSourceSetting.current() })
+    }
     open val appInstaller: AppInstaller by lazy { AndroidUpdateManager.get(this) }
     open val appData: AppDataControl by lazy { AndroidAppDataControl(this) }
 
@@ -71,6 +74,7 @@ open class HydrosApplication : Application(), CameraXConfig.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        UpdateSourceSetting.install(this)
         dependencies = buildDependencies()
         warmUpScanner()
     }
