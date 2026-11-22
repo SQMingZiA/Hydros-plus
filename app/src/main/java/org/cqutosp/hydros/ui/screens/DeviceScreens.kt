@@ -156,11 +156,12 @@ fun DeviceDetailScreen(device: DeviceUi?, state: HydrosUiState, onConnect: (Devi
                         })
                     }
                 }
-                state.connectingId == device.id && state.connectionStage == ConnectionStage.READY -> {
+                state.connectingId == device.id && state.connectionStage == ConnectionStage.READY && device.status != DeviceStatus.OFFLINE -> {
                     if (device.status == DeviceStatus.BUSY) PrimaryAction("核实并恢复本人订单", enabled = !state.working, loading = state.working) { onStart(device) }
                     else HoldActionButton(device.id, enabled = !state.working, working = state.working) { onStart(device) }
                 }
-                device.status == DeviceStatus.OFFLINE && device.channel == ControlChannel.CLOUD -> SecondaryAction("返回", onClick = onBack)
+                // 离线设备无论走云端还是蓝牙，都不再提供「连接设备」/「使用」入口。
+                device.status == DeviceStatus.OFFLINE -> SecondaryAction("返回", onClick = onBack)
                 else -> PrimaryAction("连接设备") { onConnect(device) }
             }
         }

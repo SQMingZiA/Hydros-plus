@@ -33,6 +33,8 @@ fun NearbyDevices(
     onSelect: (String) -> Unit,
     remarks: Map<String, String> = emptyMap(),
     demoMode: Boolean = false,
+    /** 已在上方「我的设备」展示的收藏设备，附近列表不再重复一遍。 */
+    excludeIds: Set<String> = emptySet(),
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -107,7 +109,7 @@ fun NearbyDevices(
                 })
             }
             val found = state.devices.map { it.id }.toSet()
-            val nearby = devices.filter { it.id in found }
+            val nearby = devices.filter { it.id in found && it.id !in excludeIds }.distinctBy { it.id }
             nearby.forEachIndexed { index, device ->
                 if (index > 0) SubtleDivider(horizontalPadding = 0.dp)
                 DeviceRow(device, remarks) { onSelect(device.id) }
@@ -118,7 +120,7 @@ fun NearbyDevices(
                     loading = true,
                     modifier = Modifier.padding(vertical = if (nearby.isEmpty()) 12.dp else 0.dp)
                 )
-            } else if (state.hasSearched && nearby.isEmpty() && state.error == null) {
+            } else if (state.hasSearched && found.isEmpty() && state.error == null) {
                 InlineState(
                     title = "未发现附近设备",
                     icon = null,

@@ -145,7 +145,7 @@ class HydrosViewModel(
                 previous = nearby.devices
                 mutable.update { current -> current.copy(
                     nearby = nearby,
-                    devices = current.devices.filterNot { old -> resolved.any { it.id == old.id } } + resolved,
+                    devices = (current.devices.filterNot { old -> resolved.any { it.id == old.id } } + resolved).distinctBy { it.id },
                     message = current.message,
                 ) }
             }
@@ -232,7 +232,7 @@ class HydrosViewModel(
                         messageReadRevisions=if (auth != null) current.messageReadRevisions else emptyList(),
                         account=AccountUi(phone=auth?.phone ?: ""),
                         // 演示模式下保留本地方案，否则每次登录态刷新都会把演示设备与账单清空。
-                        devices=if (current.demoMode) current.devices else saved?.devices ?: emptyList(),
+                        devices=(if (current.demoMode) current.devices else saved?.devices ?: emptyList()).distinctBy { it.id },
                         connectedDeviceIds=if (current.demoMode) current.connectedDeviceIds else saved?.recent ?: emptyList(),
                         favoriteDeviceIds=if (current.demoMode) current.favoriteDeviceIds else saved?.favorites ?: emptySet(),
                         deviceRemarks=if (current.demoMode) current.deviceRemarks else saved?.deviceRemarks ?: emptyMap(),
@@ -901,6 +901,14 @@ class HydrosViewModel(
     }
     fun start(device: DeviceUi) {
         if (state.value.working || state.value.session != null) return
+        // 设备离线时不进入任何开始流程：演示模式不模拟计费，真实模式也不向网关发起开启。
+        if (device.status == DeviceStatus.OFFLINE) {
+            mutable.update {
+                it.copy(message = "设备当前离线，暂时无法开始使用", messageSeverity = FeedbackSeverity.WARNING,
+                    messageSource = "device-offline", messageAction = null)
+            }
+            return
+        }
         // 达到本月限额且开启了“禁止使用”时，直接拦下，不向网关发起开启请求。
         val limit = state.value.waterLimitCents?.takeIf { it > 0 }
         val usage = state.value.waterUsage

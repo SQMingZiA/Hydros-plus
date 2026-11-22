@@ -16,6 +16,8 @@ import java.math.BigDecimal
 open class ApiFailure(val code: Int?, override val message: String, val expired: Boolean = false) : Exception(message)
 /** Only an explicit rejection before a potentially successful command permits a channel change. */
 class CloudDeviceOffline : ApiFailure(306, "设备无法通过云端开启")
+/** 设备查询结果显示离线：设备不在线时既不能进入可用状态，也不能开始计费。 */
+class DeviceOffline : ApiFailure(306, "设备当前离线，暂时无法开始使用，请稍后重试")
 /** 一次会话探测的结论：有效、确认失效，或暂时无法判断（网络/网关异常）。 */
 enum class SessionVerdict { VALID, EXPIRED, UNKNOWN }
 interface CampusTransport {

@@ -127,16 +127,21 @@ class RealDeviceRepository(
     override suspend fun prepare(auth: Credentials, device: DeviceUi): DeviceUi = operation.withLock {
         if (store.account(auth.key).session != null) throw ApiFailure(null, "请先处理当前设备会话")
         val cached = synchronized(infoCache) { infoCache[device.id] }
+        // 离线快照可以直接拦住；但「可用」快照可能已经过期，连接前必须重新查询在线状态。
         val fresh = cached?.takeIf {
-            it.isFresh(auth) && it.device.ledgerMac == device.ledgerMac
+            it.isFresh(auth) && it.device.ledgerMac == device.ledgerMac && it.device.status != DeviceStatus.AVAILABLE
         }?.device ?: withTimeoutOrNull(DEVICE_INFO_TIMEOUT_MS) {
             failureBoundary(FailureOperation.DEVICE, FailureStage.DEVICE_INFO) { findInfo(auth, device.ledgerMac, fallbackConnectMac = device.connectMac) }
         } ?: throw NetworkFailure("设备查询超时，请重新连接")
         val response = failureBoundary(FailureOperation.DEVICE, FailureStage.CLOUD_STATUS) { transport.post("order/tcpDevice/query/rateOrder/using", mapOf("snCode" to fresh.id, "xfModel" to "0"), auth) }
         when(val state = runningOrder(response)) {
             is RunningOrder.Running -> remember(auth, fresh.copy(channel=ControlChannel.CLOUD, status=DeviceStatus.BUSY))
-            RunningOrder.Ended -> remember(auth, fresh.copy(channel=ControlChannel.CLOUD,
-                status=if(fresh.status == DeviceStatus.OFFLINE) DeviceStatus.OFFLINE else DeviceStatus.AVAILABLE))
+            RunningOrder.Ended -> {
+                // 云端没有进行中的订单，但设备本身离线：不能进入 READY，
+                // 否则详情页会出现「使用」按钮并开始一场没有出水的计费。
+                if (fresh.status == DeviceStatus.OFFLINE) throw DeviceOffline()
+                remember(auth, fresh.copy(channel=ControlChannel.CLOUD, status=DeviceStatus.AVAILABLE))
+            }
             RunningOrder.Unknown -> if (response.errorCode == 306) throw CloudDeviceOffline()
                 else throw ApiFailure(response.errorCode, response.displayMessage ?: "设备状态暂无法确认")
         }

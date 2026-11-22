@@ -217,6 +217,7 @@ fun HomeScreen(
                 onNearbyDevice,
                 state.deviceRemarks,
                 demoMode = state.demoMode,
+                excludeIds = state.favoriteDeviceIds,
             )
         }
     }

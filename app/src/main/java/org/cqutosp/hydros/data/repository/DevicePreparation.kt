@@ -2,8 +2,10 @@ package org.cqutosp.hydros.data.repository
 
 import org.cqutosp.hydros.data.network.ApiFailure
 import org.cqutosp.hydros.data.network.Credentials
+import org.cqutosp.hydros.data.network.DeviceOffline
 import org.cqutosp.hydros.data.storage.HydrosStore
 import org.cqutosp.hydros.ui.state.ConnectionStage
+import org.cqutosp.hydros.ui.state.DeviceStatus
 import org.cqutosp.hydros.ui.state.DeviceUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -112,6 +114,8 @@ class DevicePreparation(
         val device = ready.device ?: throw ApiFailure(null, "请先连接设备")
         if (device.id != deviceId) throw ApiFailure(null, "请先连接设备")
         if (ready.stage != ConnectionStage.READY) throw ApiFailure(null, "请先连接设备")
+        // 连接成功后设备可能已经离线，最后的开启动作必须再确认一次。
+        if (device.status == DeviceStatus.OFFLINE) throw DeviceOffline()
         if (auth.credentials.value != owner.auth) throw ApiFailure(null, "请重新连接设备")
 
         ensureWatch()
