@@ -293,12 +293,6 @@ private fun LegalStep(
         ) {
             OnboardingTitle("阅读相关条款")
 
-            Text(
-                text = "Hydros+ 是基于 Hydros 及 muguang、quzhi-campus-third-party 等开源项目改进的第三方客户端，仅用于开发学习与技术研究，与官方及其运营方无关。请先阅读以下条款。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
             OnboardingCard {
                 MineRow(
                     title = "Hydros 服务协议",

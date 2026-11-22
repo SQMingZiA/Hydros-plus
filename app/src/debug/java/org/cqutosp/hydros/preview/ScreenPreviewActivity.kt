@@ -58,6 +58,10 @@ import org.cqutosp.hydros.ui.screens.AppearanceScreen
 import org.cqutosp.hydros.ui.screens.BillDetailScreen
 import org.cqutosp.hydros.ui.screens.CampusMessageDetailScreen
 import org.cqutosp.hydros.ui.screens.CampusMessagesScreen
+import org.cqutosp.hydros.ui.screens.NotificationsScreen
+import org.cqutosp.hydros.ui.share.MessageShareAction
+import org.cqutosp.hydros.data.notify.NotificationTopic
+import org.cqutosp.hydros.data.storage.NotificationSettings
 import org.cqutosp.hydros.ui.screens.DeviceDetailScreen
 import org.cqutosp.hydros.ui.screens.DeveloperScreen
 import org.cqutosp.hydros.ui.screens.DisplaySettingsScreen
@@ -602,8 +606,18 @@ class ScreenPreviewActivity : ComponentActivity() {
                             onOpen = {},
                         )
                     }
-                    "messagedetail" -> HydrosPage("消息详情", onBack = {}) {
+                    "messagedetail" -> HydrosPage("消息详情", onBack = {},
+                        actions = { MessageShareAction(previewMessages().first(), onResult = {}) },
+                    ) {
                         CampusMessageDetailScreen(previewMessages().first())
+                    }
+                    "notifications" -> HydrosPage("通知管理", onBack = {}) {
+                        NotificationsScreen(
+                            settings = NotificationSettings(),
+                            onMasterChange = {},
+                            onTopicChange = { _, _ -> },
+                            onTestNotification = {},
+                        )
                     }
                     "licenses" -> HydrosPage("开源许可", onBack = {}) {
                         LicensesIndexScreen(onProject = {}, onThirdParty = {}, onReferences = {})

@@ -35,6 +35,26 @@ import javax.crypto.spec.SecretKeySpec
     /** 关闭长按取水的动画：开启后设备改为点击即开始使用。 */
     val waterAnimationDisabled: Boolean = false
 )
+/**
+ * 通知偏好：一个总开关 + 按主题细分的开关。
+ *
+ * 总开关关闭时不发任何系统通知；单个主题关闭只影响该主题，界面内的提示不受影响。
+ */
+@Serializable data class NotificationSettings(
+    val enabled: Boolean = true,
+    /** 用水与限额：达到月度限额、开始/结束用水。 */
+    val waterAlerts: Boolean = true,
+    /** 账单与充值：账单结算、充值到账、余额不足。 */
+    val billing: Boolean = true,
+    /** 校园通知：学校推送的停水、检修与公告。 */
+    val campus: Boolean = true,
+    /** 设备与使用：设备连接、掉线、会话异常。 */
+    val device: Boolean = true,
+    /** 版本更新：发现新版本。 */
+    val updates: Boolean = true,
+    /** 由系统通知权限被拒绝导致的静默状态，记录上次检查时间。 */
+    val lastPromptedAt: Long = 0L,
+)
 @Serializable private data class SavedSettings(val token: String? = null, /** 不依赖 Keystore 的后备密文，默认 null 以兼容旧版数据。 */ val tokenBackup: String? = null, val lastAccount: String? = null, val theme: String = "SYSTEM", val accounts: Map<String, SavedAccount> = emptyMap(), val onboardingCompleted: Boolean = false,
     val feedback: FeedbackSettings = FeedbackSettings(), val fontSizeScale: Float = 1f,
     val postSessionDestination: String = PostSessionDestination.BILL.name,
@@ -44,6 +64,8 @@ import javax.crypto.spec.SecretKeySpec
     val accentColor: Long? = null, val wallpaperPath: String? = null, val wallpaperDim: Float = 0.0f, val wallpaperBlur: Float = 0.0f,
     /** 底部导航是否启用液态玻璃（折射+模糊），关闭后改为普通磨砂。 */ val liquidGlass: Boolean = true,
     /** 启动时是否自动检查新版本；关闭后不再自动请求更新源。 */ val updateCheckEnabled: Boolean = true,
+    /** 系统通知偏好（总开关 + 主题开关）。 */
+    val notifications: NotificationSettings = NotificationSettings(),
     /** 校园消息回执：是否已建立基线、出现过的版本号、已读版本号。 */
     val messageBaseline: Boolean = false, val messageKnown: List<String> = emptyList(),
     val messageRead: List<String> = emptyList())
@@ -90,6 +112,9 @@ interface HydrosStore {
     /** 启动自动版本检测开关：关闭后不再自动访问更新源。 */
     suspend fun updateCheckEnabled(): Boolean = true
     suspend fun updateCheckEnabled(value: Boolean) {}
+    /** 系统通知偏好（总开关 + 主题开关）。 */
+    suspend fun notifications(): NotificationSettings = NotificationSettings()
+    suspend fun notifications(value: NotificationSettings) {}
     /** 自定义头像在应用私有目录里的绝对路径，null 表示使用默认头像。 */
     suspend fun fontWeightStep(): Int = 0
     suspend fun fontWeightStep(value: Int) {}
@@ -218,6 +243,8 @@ class PreferencesHydrosStore(context: Context) : HydrosStore {
     override suspend fun liquidGlass() = read().liquidGlass
     override suspend fun liquidGlass(value: Boolean) { edit { it.copy(liquidGlass = value) } }
     override suspend fun updateCheckEnabled() = read().updateCheckEnabled
+    override suspend fun notifications() = read().notifications
+    override suspend fun notifications(value: NotificationSettings) { edit { it.copy(notifications = value) } }
     override suspend fun updateCheckEnabled(value: Boolean) { edit { it.copy(updateCheckEnabled = value) } }
     override suspend fun fontWeightStep() = read().fontWeightStep
     override suspend fun fontWeightStep(value: Int) { edit { it.copy(fontWeightStep = value) } }

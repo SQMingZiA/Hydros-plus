@@ -439,6 +439,7 @@ fun MineScreen(
     onRecharge: () -> Unit = {},
     onAvatarPath: (String?) -> Unit = {},
     onMessages: () -> Unit = {},
+    onNotifications: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -524,6 +525,8 @@ fun MineScreen(
             MineRow("反馈设置", icon = R.drawable.ic_vibration, tone = IconTone.PRIMARY, onClick = onFeedback)
             SubtleDivider()
             MineRow("显示设置", icon = R.drawable.ic_display_settings, tone = IconTone.PRIMARY, onClick = onDisplay)
+            SubtleDivider()
+            MineRow("通知管理", icon = R.drawable.ic_notifications, tone = IconTone.PRIMARY, onClick = onNotifications)
             SubtleDivider()
             MineRow("应用外观", icon = R.drawable.ic_palette, tone = IconTone.SECONDARY, onClick = onAppearance)
         }

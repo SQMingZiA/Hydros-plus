@@ -123,6 +123,7 @@ import org.cqutosp.hydros.ui.legal.LegalDocuments
 import com.mikepenz.markdown.model.rememberMarkdownState
 import org.cqutosp.hydros.ui.state.*
 import org.cqutosp.hydros.ui.screens.*
+import org.cqutosp.hydros.ui.share.MessageShareAction
 import org.cqutosp.hydros.ui.theme.HydrosTheme
 import org.cqutosp.hydros.ui.theme.FontChoice
 import org.cqutosp.hydros.ui.theme.fontSet
@@ -180,6 +181,10 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
     thirdParty: ThirdPartyViewModel = thirdPartyViewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
     val updates by appInfo.updates.collectAsStateWithLifecycle()
+    // 版本更新也走系统通知，是否提醒由「通知管理」里的版本更新开关决定。
+    LaunchedEffect(updates.hasUpdate, updates.release?.version) {
+        if (updates.hasUpdate) updates.release?.version?.let(model::notifyUpdateAvailable)
+    }
     val history by appInfo.history.collectAsStateWithLifecycle()
     val detail by appInfo.detail.collectAsStateWithLifecycle()
     val nav = rememberNavController()
@@ -510,8 +515,8 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 },
                                 bottomBar = { HydrosBottomBar("recharge", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight, messageUnread = state.unreadMessageCount) }) {
                                 RechargeTab(thirdParty = thirdParty, context = context, snackbar = snackbar,
-                                    merchant = state.account.operator.takeIf { it.isNotBlank() }
-                                        ?: state.account.school.takeIf { it.isNotBlank() && it != "—" })
+                                    // 运营商家由网关按学校下发，不是固定值；取不到时整行隐藏，不拿学校名兜底。
+                                    merchant = state.account.operator.takeIf { it.isNotBlank() })
                             }
                         }
                         composable("recharge/info") {
@@ -548,6 +553,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                         onDorm = { openPage("thirdparty/dorm") },
                                         onAvatarPath = model::avatarPath,
                                         onMessages = { main("messages") },
+                                        onNotifications = { openPage("notifications") },
                                         onAbout = { openPage("about") }, hasUpdate = updates.hasUpdate)
                                 }
                             }
@@ -574,8 +580,19 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                         composable("message/{id}") { entry ->
                             val id = entry.arguments?.getString("id").orEmpty()
                             val message = state.messages.firstOrNull { it.id == id }
-                            HydrosPage("消息详情", onBack = { back() }) {
+                            HydrosPage("消息详情", onBack = { back() },
+                                actions = { if (message != null) MessageShareAction(message, onResult = { snackbar.show(it) }) }) {
                                 CampusMessageDetailScreen(message, onRead = { model.markMessageRead(it.revision) })
+                            }
+                        }
+                        composable("notifications") {
+                            HydrosPage("通知管理", onBack = { back() }) {
+                                NotificationsScreen(
+                                    settings = state.notificationSettings,
+                                    onMasterChange = model::notificationMaster,
+                                    onTopicChange = model::notificationTopic,
+                                    onTestNotification = model::testNotification,
+                                )
                             }
                         }
                         composable("account") {

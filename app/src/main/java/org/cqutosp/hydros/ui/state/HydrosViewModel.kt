@@ -3,6 +3,9 @@ package org.cqutosp.hydros.ui.state
 import org.cqutosp.hydros.data.feedback.*
 import org.cqutosp.hydros.data.storage.FeedbackSettings
 import org.cqutosp.hydros.data.storage.PostSessionDestination
+import org.cqutosp.hydros.data.storage.NotificationSettings
+import org.cqutosp.hydros.data.notify.HydrosNotifier
+import org.cqutosp.hydros.data.notify.NotificationTopic
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import org.cqutosp.hydros.data.HydrosDependencies
@@ -52,6 +55,7 @@ data class HydrosUiState(val initializing: Boolean = true, val signedIn: Boolean
     val resolvingPostSessionDestination: Boolean = false, val postSessionBillId: String? = null,
     val demoMode: Boolean = false, val liquidGlass: Boolean = true,
     /** 启动时是否自动检查新版本。 */ val updateCheckEnabled: Boolean = true,
+    /** 系统通知偏好：总开关 + 分类开关。 */ val notificationSettings: NotificationSettings = NotificationSettings(),
     val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null,
     val wallpaperDim: Float = 0f, val wallpaperBlur: Float = 0f,
@@ -96,6 +100,7 @@ class HydrosViewModel(
             billHistory.state.collect { history ->
                 // 演示数据模式下保留本地模拟账单，避免真实查询把它覆盖掉。
                 if (mutable.value.demoMode) return@collect
+                val previousBills = mutable.value.bills
                 mutable.update { current ->
                     // 用水报告只依据消费账单，切到充值记录时保留上一次的消费快照。
                     val usage = if (history.type == BillType.CONSUMPTION && !history.loading) {
@@ -112,6 +117,18 @@ class HydrosViewModel(
                         })
                 }
                 notifyWaterLimit()
+                // 同一月份里多出新账单时提醒一次；首次加载与切换月份不算新账单。
+                if (history.type == BillType.CONSUMPTION && previousBills.isNotEmpty() &&
+                    history.month == previousBills.first().month.toString() && history.bills.size > previousBills.size) {
+                    val newest = history.bills.firstOrNull { bill -> previousBills.none { it.id == bill.id } }
+                    if (newest != null) {
+                        postNotification(
+                            NotificationTopic.BILLING, "账单已结算",
+                            newest.title + " · ¥" + money(newest.amountCents) + "，可在钱包里查看详情",
+                            0x4E05,
+                        )
+                    }
+                }
             }
         }
         graph.networkRecovery?.let { recovery ->
@@ -148,6 +165,7 @@ class HydrosViewModel(
                 val demo = runCatching { graph.store.demoMode() }.getOrDefault(false)
                 val liquidGlass = runCatching { graph.store.liquidGlass() }.getOrDefault(true)
                 val updateCheckEnabled = UpdateCheckSetting.enabled()
+                val notificationSettings = runCatching { graph.store.notifications() }.getOrDefault(NotificationSettings())
                 val fontFamily = runCatching { graph.store.fontFamily() }.getOrDefault("PINGFANG")
                 val fontWeightStep = runCatching { graph.store.fontWeightStep() }.getOrDefault(0)
                 val gradientPreset = runCatching { graph.store.gradientPreset() }.getOrDefault("DEFAULT")
@@ -168,6 +186,7 @@ class HydrosViewModel(
                     lastAccount=lastAccount,
                     liquidGlass=liquidGlass,
                     updateCheckEnabled=updateCheckEnabled,
+                    notificationSettings = notificationSettings,
                     waterUsage=it.waterUsage.copy(limitCents = waterLimitCents?.takeIf { value -> value > 0 })) }
                 if (demo) {
                     HydrosLog.log("demo", "启动时恢复演示数据模式")
@@ -201,6 +220,7 @@ class HydrosViewModel(
                         avatarPath=current.avatarPath,
                         liquidGlass=current.liquidGlass,
                         updateCheckEnabled=current.updateCheckEnabled,
+                        notificationSettings = current.notificationSettings,
                         fontFamily=current.fontFamily, fontWeightStep=current.fontWeightStep,
                         gradientPreset=current.gradientPreset,
                         gradientEnabled=current.gradientEnabled, accentColor=current.accentColor,
@@ -233,6 +253,16 @@ class HydrosViewModel(
                     value != null || auth == null -> null
                     else -> prior?.takeIf { it.ownerKey == auth.key }
                         ?: mutable.value.session?.takeIf { it.ownerKey == auth.key }
+                }
+                // 只有会话真正切换（开始/结束）时才提醒，应用重启恢复同一条会话不算新事件。
+                val previousSession = prior
+                if (previousSession != null && value != null && value.device.id != previousSession.device.id) {
+                    postNotification(NotificationTopic.DEVICE, "已开始使用 " + value.device.name,
+                        value.device.location + " · 计时已开始", 0x4E03, "session")
+                }
+                if (previousSession != null && value == null) {
+                    postNotification(NotificationTopic.DEVICE, "用水已结束",
+                        previousSession.device.name + " 的使用已结束，账单会在结算后出现在钱包里", 0x4E04, "wallet")
                 }
                 if(value == null || auth?.key == value.ownerKey || auth == null) mutable.update { current -> current.copy(
                     session=if (current.demoMode) demoSession ?: value else value,
@@ -398,6 +428,62 @@ class HydrosViewModel(
         HydrosLog.log("update", if (enabled) "已恢复自动版本检测" else "已暂停自动版本检测")
         mutable.update { it.copy(updateCheckEnabled = enabled) }
     }
+    /** 系统通知总开关；关闭后所有分类通知都不再发送。 */
+    fun notificationMaster(enabled: Boolean) = updateNotificationSettings { it.copy(enabled = enabled) }
+    /** 单个通知分类的开关。 */
+    fun notificationTopic(topic: NotificationTopic, enabled: Boolean) = updateNotificationSettings { settings ->
+        when (topic) {
+            NotificationTopic.WATER -> settings.copy(waterAlerts = enabled)
+            NotificationTopic.BILLING -> settings.copy(billing = enabled)
+            NotificationTopic.CAMPUS -> settings.copy(campus = enabled)
+            NotificationTopic.DEVICE -> settings.copy(device = enabled)
+            NotificationTopic.UPDATE -> settings.copy(updates = enabled)
+        }
+    }
+    private fun updateNotificationSettings(transform: (NotificationSettings) -> NotificationSettings) {
+        graph.scope.launch { action {
+            val next = transform(mutable.value.notificationSettings).copy(lastPromptedAt = System.currentTimeMillis())
+            mutable.update { it.copy(notificationSettings = next) }
+            graph.store.notifications(next)
+            HydrosLog.log("notify", "通知设置已更新：总开关" + (if (next.enabled) "开" else "关") +
+                "，用水" + onOff(next.waterAlerts) + "，账单" + onOff(next.billing) +
+                "，校园" + onOff(next.campus) + "，设备" + onOff(next.device) + "，更新" + onOff(next.updates))
+        } }
+    }
+    private fun onOff(value: Boolean) = if (value) "开" else "关"
+    /** 所有系统通知的唯一出口：偏好、权限、渠道三者都允许时才真正发出。 */
+    private fun postNotification(topic: NotificationTopic, title: String, body: String, id: Int, deepLink: String? = null) {
+        val context = graph.appContext ?: return
+        val posted = HydrosNotifier.notify(context, mutable.value.notificationSettings, topic, title, body, id, deepLink)
+        HydrosLog.log("notify", (if (posted) "已发送 " else "已跳过 ") + topic.label + "：" + title)
+    }
+    /** 通知管理页的测试入口：即使分类关闭也只在总开关关闭时报错，便于用户确认渠道是否正常。 */
+    fun testNotification() {
+        val context = graph.appContext
+        if (context == null || !mutable.value.notificationSettings.enabled) {
+            mutable.update { it.copy(message = "请先开启通知总开关，再发送测试通知",
+                messageSeverity = FeedbackSeverity.WARNING, messageSource = "notify", messageAction = null) }
+            return
+        }
+        val enabled = NotificationTopic.entries.firstOrNull { HydrosNotifier.canPost(context, mutable.value.notificationSettings, it) }
+        if (enabled == null) {
+            mutable.update { it.copy(message = "系统通知权限或渠道被关闭，请先在系统设置里允许 Hydros+ 发送通知",
+                messageSeverity = FeedbackSeverity.WARNING, messageSource = "notify", messageAction = null) }
+            return
+        }
+        postNotification(enabled, "测试通知", "如果你看到这条通知，说明「" + enabled.label + "」渠道工作正常。", 0x4E10)
+        mutable.update { it.copy(message = "测试通知已发送，可下拉通知栏查看",
+            messageSeverity = FeedbackSeverity.SUCCESS, messageSource = "notify", messageAction = null) }
+    }
+    /** 本次进程内已经提醒过的版本，避免每次回到首页都重复弹同一条更新通知。 */
+    private var notifiedUpdateVersion: String? = null
+    /** 发现新版本时提醒一次。 */
+    fun notifyUpdateAvailable(version: String) {
+        if (version.isBlank() || version == notifiedUpdateVersion) return
+        notifiedUpdateVersion = version
+        postNotification(NotificationTopic.UPDATE, "发现新版本 " + version,
+            "Hydros+ " + version + " 已发布，可在「软件更新」里查看更新内容并安装。", 0x4E11, "software-update")
+    }
     /** 只清理缓存与临时文件，账号、设备、设置与头像都保留。 */
     fun clearCache(clear: () -> Boolean): Boolean {
         HydrosLog.log("data", "请求清除缓存")
@@ -486,6 +572,7 @@ class HydrosViewModel(
             else "本月用水支出 ¥" + money(usage.totalCents) + "，已达设定的用水限额 ¥" + money(limit)
         mutable.update { it.copy(waterLimitNotifiedMonth = usage.month, message = text,
             messageSeverity = FeedbackSeverity.WARNING, messageSource = "water-limit", messageAction = null) }
+        postNotification(NotificationTopic.WATER, "用水限额提醒", text, 0x4E01, "water/report")
         graph.scope.launch { runCatching { graph.store.waterLimitNotifiedMonth(usage.month) } }
     }
     fun reduceMotion(enabled: Boolean) {
@@ -901,6 +988,7 @@ class HydrosViewModel(
                     runCatching { graph.store.messageReceipts(receipts) }
                 }
                 if (graph.auth.credentials.value != auth) return@launch
+                val previous = mutable.value.messages
                 mutable.update {
                     it.copy(
                         messages = list, messagesLoaded = true, messagesLoading = false, messagesError = null,
@@ -908,6 +996,18 @@ class HydrosViewModel(
                     )
                 }
                 HydrosLog.log("message", "消息同步完成：共 " + list.size + " 条")
+                // 首次同步只建立基线；之后新增且未读的消息才发系统通知，历史消息不补发。
+                val arrivals = list.filter { message -> previous.none { it.revision == message.revision } && message.revision !in receipts.read }
+                if (arrivals.isNotEmpty()) {
+                    val first = arrivals.first()
+                    postNotification(
+                        NotificationTopic.CAMPUS,
+                        if (arrivals.size == 1) first.title else "收到 " + arrivals.size + " 条校园通知",
+                        if (arrivals.size == 1) first.summary else first.title + " 等 " + arrivals.size + " 条消息",
+                        0x4E02,
+                        "message/" + first.id,
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

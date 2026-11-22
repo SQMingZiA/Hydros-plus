@@ -1,6 +1,7 @@
 package org.cqutosp.hydros.data
 
 import android.app.Application
+import android.content.Context
 import org.cqutosp.hydros.BuildConfig
 import org.cqutosp.hydros.data.ble.AndroidNearbyScanner
 import org.cqutosp.hydros.data.ble.NearbyScanner
@@ -50,6 +51,8 @@ class HydrosDependencies(
     val networkRecovery: NetworkRecovery? = null,
     /** 供 thirdparty 包（使用码 / 充值）复用的校园网关传输层；预览与单元测试可为空。 */
     val transport: org.cqutosp.hydros.data.network.CampusTransport? = null,
+    /** 应用 Context，供系统通知等平台能力使用；单元测试可为空。 */
+    val appContext: Context? = null,
 ) {
     private val restoration = SessionRestoration(auth, sessions)
     suspend fun restore() = restoration.restore()
@@ -77,6 +80,8 @@ open class HydrosApplication : Application(), CameraXConfig.Provider {
         super.onCreate()
         UpdateSourceSetting.install(this)
         UpdateCheckSetting.install(this)
+        // 系统通知渠道可以重复创建，放在依赖构建之前，保证任何通知都不会因为渠道缺失被丢弃。
+        org.cqutosp.hydros.data.notify.HydrosNotifier.ensureChannels(this)
         dependencies = buildDependencies()
         warmUpScanner()
     }
@@ -122,6 +127,7 @@ fun createDependencies(app: Application): HydrosDependencies {
         orderPush = { MqttOrderPush() },
         networkRecovery = recovery,
         transport = transport,
+        appContext = app,
     )
 }
 
