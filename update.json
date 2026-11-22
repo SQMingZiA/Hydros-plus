@@ -1,6 +1,21 @@
 {
-  "generated_at": "2026-11-22T03:45:51.057Z",
+  "generated_at": "2026-11-22T10:36:10Z",
   "releases": [
+    {
+      "version": "1.4.5",
+      "tag": "v1.4.5",
+      "name": "Hydros+ 1.4.5",
+      "published_at": "2026-11-22T10:27:32Z",
+      "notes": "### Hydros+ 1.4.5 · 2026-11-22\n\n> 修复收藏的离线设备仍出现「使用」按钮并开始模拟计费；修复设置备注后重新扫描时同一台设备在首页出现两次；精简通知管理页面。\n\n#### 修复\n- **离线设备误开启**：非开发者模式下，离线设备不再显示「使用」按钮，也不会进入模拟计费；连接与开始用水前都会重新校验在线状态，蓝牙离线设备同样不再提供「连接设备」入口。\n- **设备重复**：设置备注并重新扫描后，已收藏的设备只保留在首页「我的设备」分组，不再同时重复出现在「附近设备」；载入与合并设备列表时按设备编号去重。\n\n#### 变更\n- **通知管理**：移除「通知渠道」与「说明」两个重复区块、各开关下的大段解释与测试说明；总开关关闭时隐藏分类通知，渠道被系统关闭时只保留一个跳转入口。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.4.5-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.4.4...v1.4.5\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.4.5-release.apk",
+          "size": 16475860,
+          "sha256": "44ed8006dfd02f1c49aba2a535817d9f3e9dead217421fc5d87d0e00cd096d51"
+        }
+      ]
+    },
+
     {
       "version": "1.4.4",
       "tag": "v1.4.4",
