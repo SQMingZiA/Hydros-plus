@@ -495,6 +495,8 @@ fun HydrosPage(
     containerColor: Color = Color.Unspecified,
     bottomBar: @Composable () -> Unit = {},
     titleContent: (@Composable () -> Unit)? = null,
+    /** 标题行右侧的操作按钮（分享、收藏等）。 */
+    actions: (@Composable () -> Unit)? = null,
     subtitle: String? = null,
     header: (@Composable () -> Unit)? = null,
     background: (@Composable () -> Unit)? = null,
@@ -558,6 +560,7 @@ fun HydrosPage(
                                 maxLines = 1
                             )
                         }
+                        if (actions != null) actions()
                     }
                     if (!subtitle.isNullOrBlank()) {
                         Text(

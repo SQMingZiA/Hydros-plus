@@ -29,6 +29,8 @@ import org.cqutosp.hydros.ui.state.DeviceUi
 fun DeveloperScreen(
     demoMode: Boolean = false,
     onDemoMode: (Boolean) -> Unit = {},
+    updateCheckEnabled: Boolean = true,
+    onUpdateCheckEnabled: (Boolean) -> Unit = {},
     onOpenLogs: () -> Unit = {},
     buildInfo: List<Pair<String, String>> = emptyList(),
     onCopyBuildInfo: () -> Unit = {},
@@ -50,6 +52,19 @@ fun DeveloperScreen(
                 supporting = "模拟在线设备、使用中会话与账单，便于无设备调试",
                 icon = R.drawable.ic_code,
                 tone = IconTone.PRIMARY
+            )
+            SubtleDivider()
+            SwitchRow(
+                title = "自动版本检测",
+                checked = updateCheckEnabled,
+                onCheckedChange = onUpdateCheckEnabled,
+                supporting = if (updateCheckEnabled) {
+                    "启动时检查新版本；关闭后不再自动访问更新源，仍可在「软件更新」里手动检查"
+                } else {
+                    "已暂停自动检测，不会再因连不上更新源而提示失败"
+                },
+                icon = R.drawable.ic_download,
+                tone = IconTone.SECONDARY
             )
             SubtleDivider()
             MineRow(

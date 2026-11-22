@@ -64,9 +64,11 @@ fun AboutScreen(
     onProjectLicense: () -> Unit,
     onTerms: () -> Unit,
     onPrivacy: () -> Unit,
+    onPlusTerms: () -> Unit = {},
     onDeveloper: () -> Unit,
     appData: AppDataControl,
-    onClear: () -> Boolean
+    onClear: () -> Boolean,
+    onClearCache: () -> Boolean = { false }
 ) {
     val snackbar = LocalHydrosSnackbar.current
     var developerPageTapCount by remember { mutableIntStateOf(0) }
@@ -83,6 +85,10 @@ fun AboutScreen(
     var dataBytes by remember { mutableStateOf<Long?>(null) }
     var clearDialog by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
+    var cacheDialog by remember { mutableStateOf(false) }
+    var clearingCache by remember { mutableStateOf(false) }
+    var cacheBytes by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(appData) { cacheBytes = appData.cacheSizeBytes() }
     LaunchedEffect(appData) { dataBytes = appData.sizeBytes() }
     val buildTime = remember {
         DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm", Locale.CHINA)
@@ -95,38 +101,6 @@ fun AboutScreen(
         { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
     } else null
     PageColumn {
-        // 页头：应用图标 + 名称，和「关于」页的定位对应。
-        Row(
-            Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    painter = painterResource(R.mipmap.ic_launcher_default_foreground),
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                )
-            }
-            Column(Modifier.padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    "Hydros+",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    "校园热水 · 扫码即用",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
         Section("版本信息") {
             MineRow("当前版本", supporting = BuildConfig.VERSION_NAME, icon = R.drawable.ic_info,
                 tone = IconTone.PRIMARY, onClick = onUpdates, trailing = versionBadge)
@@ -135,6 +109,11 @@ fun AboutScreen(
                 onClick = { onBuildTimeClickForDeveloperPage() })
         }
         Section("存储占用情况") {
+            MineRow("清除缓存",
+                supporting = cacheBytes?.let { "临时文件 ${formatDataSize(it)}，账号与设置保留" }
+                    ?: "清理临时文件，账号与设置保留",
+                icon = R.drawable.ic_refresh, tone = IconTone.PRIMARY, onClick = { cacheDialog = true })
+            SubtleDivider()
             MineRow("清除所有数据", supporting = dataBytes?.let { "当前占用 ${formatDataSize(it)}" }.orEmpty(),
                 icon = R.drawable.ic_delete_sweep, onClick = { clearDialog = true },
                 trailing = clearTrailing)
@@ -143,6 +122,8 @@ fun AboutScreen(
             MineRow("服务协议", icon = R.drawable.ic_gavel, tone = IconTone.PRIMARY, onClick = onTerms)
             SubtleDivider()
             MineRow("隐私政策", icon = R.drawable.ic_shield, tone = IconTone.SECONDARY, onClick = onPrivacy)
+            SubtleDivider()
+            MineRow("Hydros+ 服务协议", icon = R.drawable.ic_info, tone = IconTone.PRIMARY, onClick = onPlusTerms)
             SubtleDivider()
             MineRow("开源许可", icon = R.drawable.ic_code, tone = IconTone.TERTIARY, onClick = onLicenses)
         }
@@ -166,6 +147,18 @@ fun AboutScreen(
         clearDialog = false
         clearing = false
     }
+    if (cacheDialog) ConfirmBottomSheet(
+        title = "清除缓存？",
+        description = "只清理图片、日志等临时文件，账号、设备、账单与全部设置都会保留。",
+        confirm = "清除缓存",
+        onDismiss = { cacheDialog = false },
+    ) {
+        cacheDialog = false
+        clearingCache = true
+        onClearCache()
+        cacheBytes = 0L
+        clearingCache = false
+    }
 }
 
 private fun formatDataSize(bytes: Long): String = when {
@@ -176,12 +169,54 @@ private fun formatDataSize(bytes: Long): String = when {
 }
 
 @Composable
-fun LicensesIndexScreen(onProject: () -> Unit, onThirdParty: () -> Unit) {
+fun LicensesIndexScreen(onProject: () -> Unit, onThirdParty: () -> Unit, onReferences: () -> Unit = {}) {
     PageColumn {
         Section("许可证") {
             MineRow("本项目许可证", icon = R.drawable.ic_gavel, tone = IconTone.PRIMARY, onClick = onProject)
             SubtleDivider()
             MineRow("第三方依赖许可证", icon = R.drawable.ic_code, tone = IconTone.SECONDARY, onClick = onThirdParty)
+        }
+        Section("参考与致谢") {
+            MineRow(
+                "参考的开源项目",
+                icon = R.drawable.ic_open_in_new,
+                tone = IconTone.TERTIARY,
+                onClick = onReferences
+            )
+        }
+    }
+}
+
+private data class ReferencedProject(
+    val name: String,
+    val url: String,
+)
+
+private val referencedProjects = listOf(
+    ReferencedProject("CQUT-OpenProject/Hydros", "https://github.com/CQUT-OpenProject/Hydros"),
+    ReferencedProject("muguang", "https://github.com/search?q=muguang+hotwater&type=repositories"),
+    ReferencedProject("quzhi-campus-third-party", "https://github.com/search?q=quzhi+campus+hotwater&type=repositories"),
+    ReferencedProject("Kyant0/AndroidLiquidGlass", "https://github.com/Kyant0/AndroidLiquidGlass"),
+    ReferencedProject("styropyr0/PrismalAGSL", "https://github.com/styropyr0/PrismalAGSL"),
+    ReferencedProject("Lucide Icons", "https://github.com/lucide-icons/lucide"),
+    ReferencedProject("Material Symbols", "https://github.com/google/material-design-icons"),
+)
+
+/** 参考过的开源项目：列出仓库、许可证与用途，便于原作者与用户核对。 */
+@Composable
+fun ReferencedProjectsScreen() {
+    val uriHandler = LocalUriHandler.current
+    PageColumn {
+        Section("参考项目") {
+            referencedProjects.forEachIndexed { index, project ->
+                if (index > 0) SubtleDivider()
+                MineRow(
+                    title = project.name,
+                    icon = R.drawable.ic_open_in_new,
+                    tone = IconTone.PRIMARY,
+                    onClick = { runCatching { uriHandler.openUri(project.url) } }
+                )
+            }
         }
     }
 }

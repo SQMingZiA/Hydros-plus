@@ -11,6 +11,7 @@ import org.cqutosp.hydros.data.update.AppRelease
 import org.cqutosp.hydros.data.update.AppUpdateSource
 import org.cqutosp.hydros.data.update.GitHubAppUpdates
 import org.cqutosp.hydros.data.update.InstallState
+import org.cqutosp.hydros.data.update.UpdateCheckSetting
 import org.cqutosp.hydros.data.update.installationError
 import org.cqutosp.hydros.data.update.isNewerRelease
 import kotlinx.coroutines.CancellationException
@@ -77,7 +78,9 @@ class AppInfoViewModel(
         }
     }
 
-    fun checkForUpdates() {
+    fun checkForUpdates(manual: Boolean = false) {
+        // 开发者页可以把自动检测关掉：网关不可达时不必每次启动都提示失败。
+        if (!manual && !UpdateCheckSetting.enabled()) return
         if (mutable.value.checking || mutable.value.install.phase != null) return
         mutable.value = mutable.value.copy(checking = true, error = null)
         viewModelScope.launch {
@@ -148,6 +151,13 @@ class AppInfoViewModel(
         detailMutable.value = ReleaseHistoryUiState()
         checkForUpdates()
         loadHistory(refresh = true)
+    }
+
+    /** 关闭自动检测时清掉上一次的失败提示，避免残留的错误条继续弹出。 */
+    fun clearError() {
+        mutable.value = mutable.value.copy(checking = false, error = null)
+        historyMutable.value = historyMutable.value.copy(error = null)
+        detailMutable.value = detailMutable.value.copy(error = null)
     }
 
     fun loadHistory(refresh: Boolean = false) {

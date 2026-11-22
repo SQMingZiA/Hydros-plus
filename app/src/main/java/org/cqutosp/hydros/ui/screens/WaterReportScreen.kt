@@ -58,11 +58,6 @@ fun WaterReportScreen(
     val limit = limitCents?.takeIf { it > 0 }
     val reached = limit != null && report.limitReached
     val colors = MaterialTheme.colorScheme
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val snackbar = LocalHydrosSnackbar.current
-    // 报告本身是可滚动长列表，直接截屏拿不到屏幕外内容，这里按同一份数据重绘成一张长图。
-    var sharing by remember { mutableStateOf(false) }
 
     PageColumn {
         // 页头：月份切换 + 本月支出。整页只有这块用左侧主色竖条强调。
@@ -148,41 +143,6 @@ fun WaterReportScreen(
                     )
                 }
             }
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(top = 4.dp),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextAction(
-                label = if (sharing) "正在生成长图…" else "保存长图并分享",
-                enabled = !sharing,
-                trailingIcon = R.drawable.ic_share,
-                onClick = {
-                    if (!sharing) {
-                    sharing = true
-                    scope.launch {
-                        val bitmap = withContext(Dispatchers.Default) {
-                            runCatching {
-                                WaterReportPoster.render(
-                                    report = report,
-                                    limitCents = limit,
-                                    primary = colors.primary.toArgb(),
-                                )
-                            }.getOrNull()
-                        }
-                        val uri = bitmap?.let { withContext(Dispatchers.IO) { WaterReportPoster.saveToGallery(context, it) } }
-                        sharing = false
-                        if (bitmap == null || uri == null) {
-                            snackbar.show("长图生成失败，请稍后重试")
-                        } else {
-                            snackbar.show("长图已保存到相册")
-                            WaterReportPoster.share(context, uri)
-                        }
-                    }
-                    }
-                },
-            )
         }
         if (!report.loaded) {
             // 账单未加载时只给一处占位，避免把 0 元当成真实数据展示。
@@ -555,4 +515,46 @@ private fun monthLabel(month: String): String {
     if (month.isBlank()) return "本月"
     val parts = month.split("-")
     return if (parts.size == 2) parts[0] + "年" + parts[1].trimStart('0') + "月" else month
+}
+/** 顶栏分享入口：把当前报告按同一份数据重绘成长图，保存到相册后拉起系统分享。 */
+@Composable
+fun WaterReportShareAction(report: WaterUsageReport, limitCents: Long?) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbar = LocalHydrosSnackbar.current
+    val primary = MaterialTheme.colorScheme.primary.toArgb()
+    var sharing by remember { mutableStateOf(false) }
+    GlassIconButton(
+        onClick = {
+            if (sharing) return@GlassIconButton
+            sharing = true
+            scope.launch {
+                val bitmap = withContext(Dispatchers.Default) {
+                    runCatching {
+                        WaterReportPoster.render(
+                            report = report,
+                            limitCents = limitCents?.takeIf { it > 0 },
+                            primary = primary,
+                        )
+                    }.getOrNull()
+                }
+                val uri = bitmap?.let { withContext(Dispatchers.IO) { WaterReportPoster.saveToGallery(context, it) } }
+                sharing = false
+                if (bitmap == null || uri == null) {
+                    snackbar.show("长图生成失败，请稍后重试")
+                } else {
+                    snackbar.show("长图已保存到相册")
+                    WaterReportPoster.share(context, uri)
+                }
+            }
+        },
+        description = "保存长图并分享",
+        size = 36.dp,
+    ) {
+        if (sharing) {
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        } else {
+            Glyph(R.drawable.ic_share, modifier = Modifier.size(20.dp))
+        }
+    }
 }

@@ -29,7 +29,12 @@ import javax.crypto.spec.SecretKeySpec
 @Serializable data class SavedAccount(val devices: List<DeviceUi> = emptyList(), val favorites: Set<String> = emptySet(),
     val recent: List<String> = emptyList(), val session: SessionUi? = null,
     val deviceRemarks: Map<String, String> = emptyMap())
-@Serializable data class FeedbackSettings(val hapticFeedbackEnabled: Boolean = true, val reduceMotionEnabled: Boolean = false)
+@Serializable data class FeedbackSettings(
+    val hapticFeedbackEnabled: Boolean = true,
+    val reduceMotionEnabled: Boolean = false,
+    /** 关闭长按取水的动画：开启后设备改为点击即开始使用。 */
+    val waterAnimationDisabled: Boolean = false
+)
 @Serializable private data class SavedSettings(val token: String? = null, /** 不依赖 Keystore 的后备密文，默认 null 以兼容旧版数据。 */ val tokenBackup: String? = null, val lastAccount: String? = null, val theme: String = "SYSTEM", val accounts: Map<String, SavedAccount> = emptyMap(), val onboardingCompleted: Boolean = false,
     val feedback: FeedbackSettings = FeedbackSettings(), val fontSizeScale: Float = 1f,
     val postSessionDestination: String = PostSessionDestination.BILL.name,
@@ -38,6 +43,7 @@ import javax.crypto.spec.SecretKeySpec
     val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null, val wallpaperDim: Float = 0.0f, val wallpaperBlur: Float = 0.0f,
     /** 底部导航是否启用液态玻璃（折射+模糊），关闭后改为普通磨砂。 */ val liquidGlass: Boolean = true,
+    /** 启动时是否自动检查新版本；关闭后不再自动请求更新源。 */ val updateCheckEnabled: Boolean = true,
     /** 校园消息回执：是否已建立基线、出现过的版本号、已读版本号。 */
     val messageBaseline: Boolean = false, val messageKnown: List<String> = emptyList(),
     val messageRead: List<String> = emptyList())
@@ -81,6 +87,9 @@ interface HydrosStore {
     /** 底部导航的液态玻璃效果开关，关闭后使用普通磨砂质感。 */
     suspend fun liquidGlass(): Boolean = true
     suspend fun liquidGlass(value: Boolean) {}
+    /** 启动自动版本检测开关：关闭后不再自动访问更新源。 */
+    suspend fun updateCheckEnabled(): Boolean = true
+    suspend fun updateCheckEnabled(value: Boolean) {}
     /** 自定义头像在应用私有目录里的绝对路径，null 表示使用默认头像。 */
     suspend fun fontWeightStep(): Int = 0
     suspend fun fontWeightStep(value: Int) {}
@@ -208,6 +217,8 @@ class PreferencesHydrosStore(context: Context) : HydrosStore {
     }
     override suspend fun liquidGlass() = read().liquidGlass
     override suspend fun liquidGlass(value: Boolean) { edit { it.copy(liquidGlass = value) } }
+    override suspend fun updateCheckEnabled() = read().updateCheckEnabled
+    override suspend fun updateCheckEnabled(value: Boolean) { edit { it.copy(updateCheckEnabled = value) } }
     override suspend fun fontWeightStep() = read().fontWeightStep
     override suspend fun fontWeightStep(value: Int) { edit { it.copy(fontWeightStep = value) } }
     override suspend fun avatarPath() = read().avatarPath

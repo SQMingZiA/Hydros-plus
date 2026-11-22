@@ -351,12 +351,14 @@ private fun todayLabel(): String {
 @Composable
 fun WalletScreen(state: HydrosUiState, onMonth: (String) -> Unit = {}, onBillType: (BillType) -> Unit = {}, onRefresh: () -> Unit = {}, onBill: (String) -> Unit) {
     val haptics = rememberHydrosHaptics()
+    // 底栏是悬浮玻璃，不占布局高度；列表底部必须自己让出这段空间，否则最后一条会被压住。
+    val glassInset = LocalLiquidGlassInset.current
     val month = state.month
     val walletError = state.walletError
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
             modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().fillMaxHeight().imePadding(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = glassInset + 24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             item("wallet-balance", "balance") {

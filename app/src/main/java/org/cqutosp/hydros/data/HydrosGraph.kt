@@ -22,6 +22,7 @@ import org.cqutosp.hydros.service.SessionWatchService
 import org.cqutosp.hydros.data.update.AppInstaller
 import org.cqutosp.hydros.data.update.AppUpdateSource
 import org.cqutosp.hydros.data.update.DefaultAppUpdates
+import org.cqutosp.hydros.data.update.UpdateCheckSetting
 import org.cqutosp.hydros.data.update.UpdateSourceSetting
 import org.cqutosp.hydros.data.update.AndroidUpdateManager
 import androidx.camera.camera2.Camera2Config
@@ -75,6 +76,7 @@ open class HydrosApplication : Application(), CameraXConfig.Provider {
     override fun onCreate() {
         super.onCreate()
         UpdateSourceSetting.install(this)
+        UpdateCheckSetting.install(this)
         dependencies = buildDependencies()
         warmUpScanner()
     }

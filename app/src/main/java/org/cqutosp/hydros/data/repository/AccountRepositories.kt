@@ -152,7 +152,34 @@ class RealAccountRepository(private val transport: CampusTransport) : AccountRep
         // 必须带账号自身的 projectId：不带时服务端回默认项目，学校/运营商名就会取错。
         val project = transport.get("project/info/triple", mapOf("projectId" to auth.projectId), auth = auth).requireData()
         return AccountUi(account.text("name")?.takeIf(String::isNotBlank) ?: "未提供姓名", auth.phone,
-            account.text("idCardNumber") ?: "未提供学号", project.text("projectName") ?: "未提供学校")
+            account.text("idCardNumber") ?: "未提供学号", project.text("projectName") ?: "未提供学校",
+            operator = project.text("investorName")?.takeIf(String::isNotBlank).orEmpty(),
+            projectFields = projectFields(project))
+    }
+
+    /** 把 project/info/triple 返回的字段按后端顺序摊平；空值直接跳过，界面就不会出现空行。 */
+    private fun projectFields(project: JsonObject): List<ProjectField> {
+        val out = mutableListOf<ProjectField>()
+        fun add(label: String, value: String?) {
+            value?.takeIf(String::isNotBlank)?.let { out += ProjectField(label, it) }
+        }
+        add("项目 ID", project.text("projectId"))
+        add("项目名称", project.text("projectName"))
+        add("项目说明", project.text("projectDescription"))
+        add("客服电话", project.text("serverPhone"))
+        add("租户 ID", project.text("tenantId"))
+        add("运营商家", project.text("investorName"))
+        add("运营商电话", project.text("investorPhone"))
+        add("集团 ID", project.text("groupId"))
+        add("是否中学", project.text("isMidSchool"))
+        add("坐标", project.text("coordinates"))
+        project.obj("migrateDTO")?.let { migrate ->
+            add("数据源名称", migrate.text("dataSourceName"))
+            add("是否迁移", migrate.text("isMigrated"))
+            add("迁移时间", migrate.text("migrateTime"))
+            add("迁移项目 ID", migrate.text("projectId"))
+        }
+        return out
     }
 }
 interface WalletRepository {

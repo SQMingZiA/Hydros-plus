@@ -19,7 +19,19 @@ enum class ConnectionStage { IDLE, CONNECTING, READY, FAILED }
     OPENING("正在开启"), OPEN_UNCONFIRMED("开启待确认"), USING("正在使用"), STOPPING("正在关闭"),
     CLOSE_UNCONFIRMED("关闭待确认"), SETTLING("正在结算"), SETTLEMENT_PENDING("结算待完成"), WRITEBACK_PENDING("设备记录待清除"),
 }
-@Serializable data class AccountUi(val name: String = "—", val phone: String = "", val studentId: String = "—", val school: String = "—")
+/** project/info/triple 里收到的一项原始字段；空值在构建时已经被过滤掉。 */
+@Serializable data class ProjectField(val label: String, val value: String)
+
+@Serializable data class AccountUi(
+    val name: String = "—",
+    val phone: String = "",
+    val studentId: String = "—",
+    val school: String = "—",
+    /** 运营商家（网关字段 investorName），充值页展示用。 */
+    val operator: String = "",
+    /** 项目接口返回的完整字段，供「接口信息」页逐条展示。 */
+    val projectFields: List<ProjectField> = emptyList(),
+)
 data class WalletUi(val totalMilli: Long? = null) {
     val totalCents get() = totalMilli?.let(::displayCents)
 }

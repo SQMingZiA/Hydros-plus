@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -37,9 +38,15 @@ import org.cqutosp.hydros.ui.HydrosBottomBar
 import org.cqutosp.hydros.ui.HomeWalletTabs
 import org.cqutosp.hydros.ui.HeaderChip
 import org.cqutosp.hydros.ui.NewVersionChip
+import org.cqutosp.hydros.ui.components.GlassIconButton
+import org.cqutosp.hydros.ui.components.InfoRow
+import org.cqutosp.hydros.ui.components.Section
+import org.cqutosp.hydros.ui.components.SubtleDivider
+import org.cqutosp.hydros.ui.components.Glyph
 import org.cqutosp.hydros.ui.components.HoldActionHost
 import org.cqutosp.hydros.ui.components.HomeBackdrop
 import org.cqutosp.hydros.ui.components.HydrosPage
+import org.cqutosp.hydros.ui.components.PageColumn
 import org.cqutosp.hydros.ui.legal.LegalDocuments
 import org.cqutosp.hydros.ui.scanner.CameraStatus
 import org.cqutosp.hydros.ui.scanner.ScanState
@@ -60,6 +67,8 @@ import org.cqutosp.hydros.ui.screens.FeedbackSettingsScreen
 import org.cqutosp.hydros.ui.screens.HomeScreen
 import org.cqutosp.hydros.ui.screens.LegalDocumentScreen
 import org.cqutosp.hydros.ui.screens.LicensesIndexScreen
+import org.cqutosp.hydros.ui.screens.ReferencedProjectsScreen
+import org.cqutosp.hydros.ui.screens.WaterReportShareAction
 import org.cqutosp.hydros.ui.screens.LoginScreen
 import org.cqutosp.hydros.ui.screens.ManageAccountScreen
 import org.cqutosp.hydros.ui.screens.MineScreen
@@ -214,7 +223,11 @@ class ScreenPreviewActivity : ComponentActivity() {
                             onAvatarPath = {},
                         )
                     }
-                    "water" -> HydrosPage("智能用水报告", onBack = {}) {
+                    "water" -> HydrosPage(
+                        "智能用水报告",
+                        onBack = {},
+                        actions = { WaterReportShareAction(state.waterUsage, PREVIEW_LIMIT_CENTS) },
+                    ) {
                         WaterReportScreen(
                             report = state.waterUsage,
                             limitCents = PREVIEW_LIMIT_CENTS,
@@ -315,13 +328,18 @@ class ScreenPreviewActivity : ComponentActivity() {
                     }
                     "recharge" -> HydrosPage("充值",
                         background = { HomeBackdrop() },
+                        actions = {
+                            GlassIconButton(onClick = {}, description = "接口信息") {
+                                Glyph(R.drawable.ic_info, modifier = Modifier.size(20.dp))
+                            }
+                        },
                         bottomBar = {
                             HydrosBottomBar(route = "recharge", onNavigate = {}, onScan = {}, onHeight = {})
                         },
                     ) {
                         RechargeScreen(
                             ui = previewRechargeUi(),
-                            merchant = "南阳科技职业学院",
+                            merchant = "广西泰力电器有限公司",
                             pendingOrder = null,
                             onOpen = {},
                             onRefresh = {},
@@ -331,6 +349,16 @@ class ScreenPreviewActivity : ComponentActivity() {
                             onConsumeOrder = {},
                             onPaymentResult = {},
                         )
+                    }
+                    "rechargeinfo" -> HydrosPage("接口信息", onBack = {}) {
+                        PageColumn {
+                            Section("项目信息") {
+                                previewAccount().projectFields.forEachIndexed { index, field ->
+                                    if (index > 0) SubtleDivider()
+                                    InfoRow(field.label, field.value)
+                                }
+                            }
+                        }
                     }
                     "rechargepending" -> HydrosPage("充值", onBack = {}) {
                         RechargeScreen(
@@ -509,6 +537,7 @@ class ScreenPreviewActivity : ComponentActivity() {
                             onDeveloper = {},
                             appData = appData,
                             onClear = { true },
+                            onClearCache = { true },
                         )
                     }
                     "update" -> HydrosPage("软件更新", onBack = {}) {
@@ -535,6 +564,7 @@ class ScreenPreviewActivity : ComponentActivity() {
                     "developer" -> HydrosPage("开发者页面", onBack = {}) {
                         DeveloperScreen(
                             demoMode = true,
+                            updateCheckEnabled = true,
                             buildInfo = listOf(
                                 "版本" to "1.5.0",
                                 "构建时间" to "2026年11月20日 16:20",
@@ -576,7 +606,10 @@ class ScreenPreviewActivity : ComponentActivity() {
                         CampusMessageDetailScreen(previewMessages().first())
                     }
                     "licenses" -> HydrosPage("开源许可", onBack = {}) {
-                        LicensesIndexScreen(onProject = {}, onThirdParty = {})
+                        LicensesIndexScreen(onProject = {}, onThirdParty = {}, onReferences = {})
+                    }
+                    "references" -> HydrosPage("参考的开源项目", onBack = {}) {
+                        ReferencedProjectsScreen()
                     }
                     "licensesproject" -> HydrosPage("本项目许可证", onBack = {}) {
                         ProjectLicenseScreen()
@@ -587,12 +620,16 @@ class ScreenPreviewActivity : ComponentActivity() {
                     "legal" -> HydrosPage("服务协议", onBack = {}) {
                         LegalDocumentScreen(LegalDocuments.TERMS_OF_SERVICE)
                     }
+                    "plusterms" -> HydrosPage("Hydros+ 服务协议", onBack = {}) {
+                        LegalDocumentScreen(LegalDocuments.HYDROS_PLUS_TERMS)
+                    }
                     "privacy" -> HydrosPage("隐私政策", onBack = {}) {
                         LegalDocumentScreen(LegalDocuments.PRIVACY_POLICY)
                     }
 
                     // ----- 首次启动 / 登录 -----
                     "onboarding" -> OnboardingScreen(onComplete = {})
+                    "onboardlegal" -> OnboardingScreen(onComplete = {}, initialStep = 1)
                     "login" -> HydrosPage("登录") {
                         LoginScreen(
                             initialPhone = "13800138000",

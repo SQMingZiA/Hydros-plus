@@ -18,6 +18,7 @@ import org.cqutosp.hydros.thirdparty.RechargeUi
 import org.cqutosp.hydros.thirdparty.UseCodeState
 import org.cqutosp.hydros.thirdparty.UseCodeUi
 import org.cqutosp.hydros.ui.state.*
+import org.cqutosp.hydros.ui.state.ProjectField
 import org.cqutosp.hydros.ui.theme.ThemeMode
 import java.io.File
 import java.time.Instant
@@ -231,7 +232,20 @@ internal fun previewBillForDetail(month: YearMonth = YearMonth.now()): BillUi {
 // ---------------------------------------------------------------------------
 
 internal fun previewAccount(): AccountUi =
-    AccountUi(PREVIEW_STUDENT_NAME, PREVIEW_STUDENT_PHONE, PREVIEW_STUDENT_ID, PREVIEW_SCHOOL)
+    AccountUi(PREVIEW_STUDENT_NAME, PREVIEW_STUDENT_PHONE, PREVIEW_STUDENT_ID, PREVIEW_SCHOOL,
+        operator = "广西泰力电器有限公司",
+        projectFields = listOf(
+            ProjectField("项目 ID", "3824"),
+            ProjectField("项目名称", PREVIEW_SCHOOL),
+            ProjectField("客服电话", "150****5891"),
+            ProjectField("租户 ID", "893"),
+            ProjectField("运营商家", "广西泰力电器有限公司"),
+            ProjectField("是否中学", "0"),
+            ProjectField("坐标", "112.15628,32.679582"),
+            ProjectField("数据源名称", "wit-order-2"),
+            ProjectField("是否迁移", "1"),
+            ProjectField("迁移时间", "2025-01-17 09:28:29"),
+        ))
 
 /**
  * 截图用的一整份 UI 状态：设备、收藏、最近使用、备注、进行中的会话、三个月的账单与用水报告。

@@ -268,8 +268,9 @@ fun DrawScope.drawLiquidGlassPanel(
     clipPath(shape) {
         drawRect(
             brush = Brush.verticalGradient(
-                0f to Color.White.copy(alpha = if (dark) 0.18f else if (liquid) 0.58f else 0.70f),
-                1f to Color.White.copy(alpha = if (dark) 0.08f else if (liquid) 0.30f else 0.40f)
+                // 开关关闭时用接近不透明的乳白霜面，和液态玻璃区分开。
+                0f to Color.White.copy(alpha = if (dark) (if (liquid) 0.18f else 0.34f) else if (liquid) 0.58f else 0.96f),
+                1f to Color.White.copy(alpha = if (dark) (if (liquid) 0.08f else 0.22f) else if (liquid) 0.30f else 0.88f)
             ),
             size = size
         )
@@ -295,6 +296,7 @@ fun DrawScope.drawLiquidDroplet(
     height: Float,
     dark: Boolean,
     glow: Float,
+    liquid: Boolean = true,
     state: LiquidBackdropState? = null,
     origin: Offset = Offset.Zero,
 ) {
@@ -306,8 +308,8 @@ fun DrawScope.drawLiquidDroplet(
     clipPath(body) {
         drawRect(
             brush = Brush.verticalGradient(
-                0f to Color.White.copy(alpha = if (dark) 0.16f else 0.46f),
-                1f to Color.White.copy(alpha = if (dark) 0.06f else 0.24f)
+                0f to Color.White.copy(alpha = if (dark) 0.16f else if (liquid) 0.46f else 0.96f),
+                1f to Color.White.copy(alpha = if (dark) 0.06f else if (liquid) 0.24f else 0.90f)
             ),
             topLeft = Offset(left, top),
             size = Size(width, height)

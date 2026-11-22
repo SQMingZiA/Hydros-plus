@@ -13,6 +13,7 @@ import org.cqutosp.hydros.ui.theme.LocalFeedbackSettings
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +23,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
@@ -44,9 +47,11 @@ fun OnboardingScreen(
     onComplete: () -> Unit,
     onTerms: () -> Unit = {},
     onPrivacy: () -> Unit = {},
+    onPlusTerms: () -> Unit = {},
+    initialStep: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var currentStep by rememberSaveable { mutableIntStateOf(0) }
+    var currentStep by rememberSaveable { mutableIntStateOf(initialStep.coerceIn(0, STEP_COUNT - 1)) }
     var agreedToLegal by rememberSaveable { mutableStateOf(false) }
 
     val reduceMotion = LocalFeedbackSettings.current.reduceMotionEnabled
@@ -181,7 +186,8 @@ fun OnboardingScreen(
                     agreed = agreedToLegal,
                     onToggleAgreed = { agreedToLegal = it },
                     onTerms = onTerms,
-                    onPrivacy = onPrivacy
+                    onPrivacy = onPrivacy,
+                    onPlusTerms = onPlusTerms
                 )
                 2 -> PermissionsStep(
                     cameraGranted = cameraGranted,
@@ -245,29 +251,18 @@ private fun WelcomeStep() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-            ) {
-                Box(Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_launcher_foreground),
-                        contentDescription = null,
-                        modifier = Modifier.size(84.dp)
-                    )
-                }
-            }
             Text(
                 text = "欢迎使用 Hydros+",
-                fontSize = 22.sp,
-                lineHeight = 28.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 30.sp,
+                lineHeight = 38.sp,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "无广告 · 轻量客户端",
-                style = MaterialTheme.typography.bodyMedium,
+                text = "趣智校园轻量三方客户端",
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -280,7 +275,8 @@ private fun LegalStep(
     agreed: Boolean,
     onToggleAgreed: (Boolean) -> Unit,
     onTerms: () -> Unit,
-    onPrivacy: () -> Unit
+    onPrivacy: () -> Unit,
+    onPlusTerms: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -297,24 +293,38 @@ private fun LegalStep(
         ) {
             OnboardingTitle("阅读相关条款")
 
+            Text(
+                text = "Hydros+ 是基于 Hydros 及 muguang、quzhi-campus-third-party 等开源项目改进的第三方客户端，仅用于开发学习与技术研究，与官方及其运营方无关。请先阅读以下条款。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             OnboardingCard {
                 MineRow(
-                    title = "服务协议",
+                    title = "Hydros 服务协议",
                     icon = R.drawable.ic_gavel,
                     tone = IconTone.PRIMARY,
                     onClick = onTerms
                 )
                 SubtleDivider(horizontalPadding = 0.dp)
                 MineRow(
-                    title = "隐私政策",
+                    title = "Hydros 隐私政策",
                     icon = R.drawable.ic_shield,
-                    tone = IconTone.PRIMARY,
+                    tone = IconTone.SECONDARY,
                     onClick = onPrivacy
+                )
+                SubtleDivider(horizontalPadding = 0.dp)
+                MineRow(
+                    title = "Hydros+ 服务协议",
+                    supporting = "补充声明与免责条款，建议优先阅读",
+                    icon = R.drawable.ic_info,
+                    tone = IconTone.TERTIARY,
+                    onClick = onPlusTerms
                 )
             }
 
             CheckboxRow(
-                text = "我已仔细阅读并同意《Hydros 服务协议》与《Hydros 隐私政策》",
+                text = "我已仔细阅读并同意《Hydros 服务协议》《Hydros 隐私政策》与《Hydros+ 服务协议》",
                 checked = agreed,
                 onCheckedChange = onToggleAgreed
             )

@@ -103,6 +103,7 @@ import org.cqutosp.hydros.thirdparty.AlipayResult
 import org.cqutosp.hydros.thirdparty.RechargeOrder
 import org.cqutosp.hydros.ui.thirdparty.launchAlipayOrder
 import org.cqutosp.hydros.ui.components.HydrosPage
+import org.cqutosp.hydros.ui.components.PageColumn
 import org.cqutosp.hydros.ui.components.InlineState
 import org.cqutosp.hydros.ui.components.PrimaryAction
 import org.cqutosp.hydros.ui.components.TextAction
@@ -111,6 +112,10 @@ import org.cqutosp.hydros.ui.thirdparty.thirdPartyViewModel
 import org.cqutosp.hydros.ui.components.HydrosSnackbarProvider
 import org.cqutosp.hydros.ui.components.HydrosSnackbarState
 import org.cqutosp.hydros.ui.components.Glyph
+import org.cqutosp.hydros.ui.components.GlassIconButton
+import org.cqutosp.hydros.ui.components.Section
+import org.cqutosp.hydros.ui.components.SubtleDivider
+import org.cqutosp.hydros.ui.components.InfoRow
 import org.cqutosp.hydros.ui.components.hydrosPressable
 import org.cqutosp.hydros.ui.components.HoldActionHost
 import org.cqutosp.hydros.ui.components.rememberHydrosHaptics
@@ -186,6 +191,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
     // These states outlive their destinations and are reused on subsequent visits.
     val terms = rememberMarkdownState(LegalDocuments.TERMS_OF_SERVICE)
     val privacy = rememberMarkdownState(LegalDocuments.PRIVACY_POLICY)
+    val plusTerms = rememberMarkdownState(LegalDocuments.HYDROS_PLUS_TERMS)
     val context=LocalContext.current
     val appData = (context.applicationContext as HydrosApplication).appData
     // The installer exposes at most one pending settings/confirmation intent; launch it as the
@@ -497,9 +503,32 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 background = if (hydrosWallpaper == null) {
                                     { org.cqutosp.hydros.ui.components.HomeBackdrop() }
                                 } else null,
+                                actions = {
+                                    GlassIconButton(onClick = { openPage("recharge/info") }, description = "接口信息") {
+                                        Glyph(R.drawable.ic_info, modifier = Modifier.size(20.dp))
+                                    }
+                                },
                                 bottomBar = { HydrosBottomBar("recharge", ::main, onScan = { openPage("scan") }, onHeight = updateBarHeight, messageUnread = state.unreadMessageCount) }) {
                                 RechargeTab(thirdParty = thirdParty, context = context, snackbar = snackbar,
-                                    school = state.account.school.takeIf { it.isNotBlank() && it != "—" })
+                                    merchant = state.account.operator.takeIf { it.isNotBlank() }
+                                        ?: state.account.school.takeIf { it.isNotBlank() && it != "—" })
+                            }
+                        }
+                        composable("recharge/info") {
+                            HydrosPage("接口信息", onBack = { back() }) {
+                                PageColumn {
+                                Section("项目信息") {
+                                    val fields = state.account.projectFields
+                                    if (fields.isEmpty()) {
+                                        InlineState("暂无接口信息", "本次没有从校园网关取到项目字段。", icon = R.drawable.ic_info)
+                                    } else {
+                                        fields.forEachIndexed { index, field ->
+                                            if (index > 0) SubtleDivider()
+                                            InfoRow(field.label, field.value)
+                                        }
+                                    }
+                                }
+                                }
                             }
                         }
                         composable("mine") {
@@ -615,7 +644,9 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                         }
                         composable("feedback") {
                             HydrosPage("反馈设置", onBack = { back() }) {
-                                FeedbackSettingsScreen(state.feedback, onHaptic = model::hapticFeedback, onReduceMotion = model::reduceMotion)
+                                FeedbackSettingsScreen(state.feedback, onHaptic = model::hapticFeedback,
+                                    onReduceMotion = model::reduceMotion,
+                                    onWaterAnimation = model::waterAnimationDisabled)
                             }
                         }
                         composable("display") {
@@ -707,7 +738,11 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                             }
                         }
                         composable("water/report") {
-                            HydrosPage("智能用水报告", onBack = { back() }) {
+                            HydrosPage(
+                                "智能用水报告",
+                                onBack = { back() },
+                                actions = { WaterReportShareAction(state.waterUsage, state.waterLimitCents) },
+                            ) {
                                 WaterReportScreen(
                                     report = state.waterUsage,
                                     limitCents = state.waterLimitCents,
@@ -738,9 +773,11 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                     onProjectLicense = { openPage("about/licenses/project") },
                                     onTerms = { openPage("legal/terms") },
                                     onPrivacy = { openPage("legal/privacy") },
+                                    onPlusTerms = { openPage("legal/plus-terms") },
                                     onDeveloper = { openPage("about/developer") },
                                     appData = appData,
-                                    onClear = { model.clearAllData(appData::clearAllData) })
+                                    onClear = { model.clearAllData(appData::clearAllData) },
+                                    onClearCache = { model.clearCache(appData::clearCache) })
                             }
                         }
                         composable("about/update") {
@@ -789,6 +826,11 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 DeveloperScreen(
                                     demoMode = state.demoMode,
                                     onDemoMode = model::demoMode,
+                                    updateCheckEnabled = state.updateCheckEnabled,
+                                    onUpdateCheckEnabled = { enabled ->
+                                        model.updateCheckEnabled(enabled)
+                                        if (!enabled) appInfo.clearError()
+                                    },
                                     onOpenLogs = { openPage("about/developer/logs") },
                                     buildInfo = listOf(
                                         "版本" to BuildConfig.VERSION_NAME,
@@ -851,8 +893,11 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                         }
                         composable("about/licenses") {
                             HydrosPage("开源许可", onBack = { back() }) {
-                                LicensesIndexScreen(onProject = { openPage("about/licenses/project") },
-                                    onThirdParty = { openPage("about/licenses/third-party") })
+                                LicensesIndexScreen(
+                                    onProject = { openPage("about/licenses/project") },
+                                    onThirdParty = { openPage("about/licenses/third-party") },
+                                    onReferences = { openPage("about/licenses/references") },
+                                )
                             }
                         }
                         composable("about/licenses/project") {
@@ -860,6 +905,9 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                         }
                         composable("about/licenses/third-party") {
                             HydrosPage("第三方依赖许可证", onBack = { back() }) { OpenSourceLicensesScreen() }
+                        }
+                        composable("about/licenses/references") {
+                            HydrosPage("参考的开源项目", onBack = { back() }) { ReferencedProjectsScreen() }
                         }
                         composable("legal/terms") {
                             HydrosPage("服务协议", onBack = { back() }) {
@@ -871,11 +919,17 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                 LegalDocumentScreen(LegalDocuments.PRIVACY_POLICY, privacy)
                             }
                         }
+                        composable("legal/plus-terms") {
+                            HydrosPage("Hydros+ 服务协议", onBack = { back() }) {
+                                LegalDocumentScreen(LegalDocuments.HYDROS_PLUS_TERMS, plusTerms)
+                            }
+                        }
                         composable("onboarding") {
                             OnboardingScreen(
                                 onComplete = model::completeOnboarding,
                                 onTerms = { openPage("legal/terms") },
-                                onPrivacy = { openPage("legal/privacy") }
+                                onPrivacy = { openPage("legal/privacy") },
+                                onPlusTerms = { openPage("legal/plus-terms") }
                             )
                         }
                         composable("login") {
@@ -1205,15 +1259,6 @@ internal fun HydrosBottomBar(
                     val pillHeight = h * 0.74f
                     val pillTop = (h - pillHeight) / 2f
                     val pillLeft = (position + 0.5f) * tabWidth - pillWidth / 2f
-                    // 液滴与相邻按钮的融合：距离越近，中间的液桥越粗。
-                    destinations.indices.forEach { index ->
-                        val d = kotlin.math.abs(position - index)
-                        if (d < 0.62f) {
-                            val strength = ((0.62f - d) / 0.62f).let { it * it }
-                            val edge = if (index < position) pillLeft else pillLeft + pillWidth
-                            drawLiquidFusion(edge, (index + 0.5f) * tabWidth, h / 2f, pillHeight, strength * (0.45f + 0.55f * lift), dark)
-                        }
-                    }
                     drawLiquidDroplet(
                         left = pillLeft,
                         top = pillTop,
@@ -1221,26 +1266,14 @@ internal fun HydrosBottomBar(
                         height = pillHeight,
                         dark = dark,
                         glow = lift,
+                        liquid = liquid,
                         state = backdrop,
                         origin = capsuleOrigin
                     )
-                    if (lift > 0.01f) {
-                        destinations.indices.forEach { index ->
-                            val d = kotlin.math.abs(position - index)
-                            val strength = (1f - d / 0.5f).coerceIn(0f, 1f) * lift
-                            drawLiquidRipple((index + 0.5f) * tabWidth, h / 2f, pillHeight, strength, dark)
-                        }
-                    }
                 }
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                     destinations.forEachIndexed { index, destination ->
                         val pressSource = remember { MutableInteractionSource() }
-                        val pressed by pressSource.collectIsPressedAsState()
-                        val pressGlow by animateFloatAsState(
-                            targetValue = if (pressed) 1f else 0f,
-                            animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.7f, stiffness = 700f),
-                            label = "tab-press-" + destination.route
-                        )
                         // 药丸掠过时，图标被“挤”成胶囊形状（横向压扁、纵向拉长），并轻微上浮。
                         val prox = if (dragging) {
                             kotlin.math.exp(-((position - index) * (position - index)) / 0.06f)
@@ -1250,17 +1283,6 @@ internal fun HydrosBottomBar(
                         } else index == selectedIndex
                         Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                             Box(Modifier.fillMaxWidth(0.82f).height(40.dp), contentAlignment = Alignment.Center) {
-                                Box(
-                                    Modifier
-                                        .matchParentSize()
-                                        .graphicsLayer { alpha = pressGlow * 0.5f }
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(
-                                            Brush.radialGradient(
-                                                listOf(Color.White.copy(alpha = if (dark) 0.26f else 0.62f), Color.Transparent)
-                                            )
-                                        )
-                                )
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier.graphicsLayer {
@@ -1320,11 +1342,6 @@ internal fun HydrosBottomBar(
                 animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.55f, stiffness = 900f),
                 label = "fab-press"
             )
-            val fabGlow by animateFloatAsState(
-                targetValue = if (fabPressed && !reduceMotion) 1f else 0f,
-                animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.7f, stiffness = 800f),
-                label = "fab-glow"
-            )
             Box(
                 Modifier
                     .size(56.dp)
@@ -1354,17 +1371,6 @@ internal fun HydrosBottomBar(
                         origin = fabOrigin
                     )
                 }
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .graphicsLayer { alpha = fabGlow * 0.5f }
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                listOf(Color.White.copy(alpha = 0.6f), Color.Transparent)
-                            )
-                        )
-                )
                 Glyph(R.drawable.ic_scan, modifier = Modifier.size(24.dp), tint = Color.White, description = "扫码")
             }
         }
@@ -1377,7 +1383,7 @@ private fun RechargeTab(
     thirdParty: ThirdPartyViewModel,
     context: android.content.Context,
     snackbar: HydrosSnackbarState,
-    school: String?
+    merchant: String?
 ) {
     val rechargeFlow = thirdParty.recharge
     val pendingFlow = thirdParty.pendingRechargeOrder
@@ -1397,7 +1403,7 @@ private fun RechargeTab(
         onSubmit = thirdParty::submitRecharge,
         onConsumeOrder = thirdParty::consumeRechargeOrder,
         onPaymentResult = {},
-        merchant = school
+        merchant = merchant
     )
     LaunchedEffect(pending) {
         val order = pending ?: return@LaunchedEffect

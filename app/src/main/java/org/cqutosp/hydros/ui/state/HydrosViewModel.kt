@@ -11,6 +11,7 @@ import org.cqutosp.hydros.data.messages.CampusMessage
 import org.cqutosp.hydros.data.messages.MessageReceipts
 import org.cqutosp.hydros.data.messages.RealMessageRepository
 import org.cqutosp.hydros.data.repository.ReauthenticationNotice
+import org.cqutosp.hydros.data.update.UpdateCheckSetting
 import org.cqutosp.hydros.data.update.UpdateSource
 import org.cqutosp.hydros.data.update.UpdateSourceSetting
 import org.cqutosp.hydros.data.repository.BillHistory
@@ -50,6 +51,7 @@ data class HydrosUiState(val initializing: Boolean = true, val signedIn: Boolean
     val postSessionDestination: PostSessionDestination = PostSessionDestination.BILL,
     val resolvingPostSessionDestination: Boolean = false, val postSessionBillId: String? = null,
     val demoMode: Boolean = false, val liquidGlass: Boolean = true,
+    /** 启动时是否自动检查新版本。 */ val updateCheckEnabled: Boolean = true,
     val fontFamily: String = "PINGFANG", val fontWeightStep: Int = 0, val gradientPreset: String = "DEFAULT", val gradientEnabled: Boolean = true,
     val accentColor: Long? = null, val wallpaperPath: String? = null,
     val wallpaperDim: Float = 0f, val wallpaperBlur: Float = 0f,
@@ -145,6 +147,7 @@ class HydrosViewModel(
                 val avatarPath = runCatching { graph.store.avatarPath() }.getOrNull()
                 val demo = runCatching { graph.store.demoMode() }.getOrDefault(false)
                 val liquidGlass = runCatching { graph.store.liquidGlass() }.getOrDefault(true)
+                val updateCheckEnabled = UpdateCheckSetting.enabled()
                 val fontFamily = runCatching { graph.store.fontFamily() }.getOrDefault("PINGFANG")
                 val fontWeightStep = runCatching { graph.store.fontWeightStep() }.getOrDefault(0)
                 val gradientPreset = runCatching { graph.store.gradientPreset() }.getOrDefault("DEFAULT")
@@ -164,6 +167,7 @@ class HydrosViewModel(
                     wallpaperPath=wallpaperPath, wallpaperDim=wallpaperDim, wallpaperBlur=wallpaperBlur,
                     lastAccount=lastAccount,
                     liquidGlass=liquidGlass,
+                    updateCheckEnabled=updateCheckEnabled,
                     waterUsage=it.waterUsage.copy(limitCents = waterLimitCents?.takeIf { value -> value > 0 })) }
                 if (demo) {
                     HydrosLog.log("demo", "启动时恢复演示数据模式")
@@ -196,6 +200,7 @@ class HydrosViewModel(
                         waterLimitNotifiedMonth=current.waterLimitNotifiedMonth, waterLimitBlock=current.waterLimitBlock,
                         avatarPath=current.avatarPath,
                         liquidGlass=current.liquidGlass,
+                        updateCheckEnabled=current.updateCheckEnabled,
                         fontFamily=current.fontFamily, fontWeightStep=current.fontWeightStep,
                         gradientPreset=current.gradientPreset,
                         gradientEnabled=current.gradientEnabled, accentColor=current.accentColor,
@@ -387,6 +392,22 @@ class HydrosViewModel(
         graph.store.liquidGlass(enabled)
         mutable.update { it.copy(liquidGlass = enabled) }
     } } }
+    /** 开发者页：暂停/恢复启动时的自动版本检测。 */
+    fun updateCheckEnabled(enabled: Boolean) {
+        UpdateCheckSetting.set(enabled)
+        HydrosLog.log("update", if (enabled) "已恢复自动版本检测" else "已暂停自动版本检测")
+        mutable.update { it.copy(updateCheckEnabled = enabled) }
+    }
+    /** 只清理缓存与临时文件，账号、设备、设置与头像都保留。 */
+    fun clearCache(clear: () -> Boolean): Boolean {
+        HydrosLog.log("data", "请求清除缓存")
+        val cleared = runCatching(clear).getOrDefault(false)
+        mutable.update { it.copy(
+            message = if (cleared) "缓存已清理，账号与设置不受影响" else "清理缓存失败，请重试",
+            messageSeverity = if (cleared) FeedbackSeverity.SUCCESS else FeedbackSeverity.ERROR,
+            messageSource = "user", messageAction = null) }
+        return cleared
+    }
     /** 保存自定义头像路径（由界面把相册图片复制到应用私有目录后回填），传 null 恢复默认头像。 */
     fun avatarPath(path: String?) {
         graph.scope.launch { action {
@@ -469,6 +490,10 @@ class HydrosViewModel(
     }
     fun reduceMotion(enabled: Boolean) {
         updateFeedback { it.copy(reduceMotionEnabled = enabled) }
+    }
+    /** 关闭用水动画后，设备改为点击即开始使用，不再需要长按。 */
+    fun waterAnimationDisabled(enabled: Boolean) {
+        updateFeedback { it.copy(waterAnimationDisabled = enabled) }
     }
     private fun updateFeedback(transform: (FeedbackSettings) -> FeedbackSettings) {
         graph.scope.launch { action {

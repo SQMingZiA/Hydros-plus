@@ -89,7 +89,6 @@ fun CampusMessagesScreen(
         if (loaded && messages.isEmpty() && error == null) {
             InlineState(
                 "还没有校园通知",
-                "开学通知、停水公告这类消息会出现在这里。",
                 icon = R.drawable.ic_message_circle,
             )
         }
@@ -102,14 +101,6 @@ fun CampusMessagesScreen(
             )
         }
 
-        if (messages.isNotEmpty()) {
-            Text(
-                "共 " + messages.size + " 条 · 消息只在本机缓存，点开后才会记为已读",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
-            )
-        }
     }
     LaunchedEffect(Unit) { if (!loaded && !loading) onRefresh() }
 }
@@ -165,7 +156,7 @@ fun CampusMessageDetailScreen(
     val colors = MaterialTheme.colorScheme
     PageColumn {
         if (message == null) {
-            InlineState("消息不存在", "可能已被服务端撤回，返回列表看看其他消息。", icon = R.drawable.ic_message_circle)
+            InlineState("消息不存在", icon = R.drawable.ic_message_circle)
         } else {
             // 标题区：日期与公告标签同一行，标题独占一行，下面用发丝线与正文分开。
             Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
@@ -214,12 +205,6 @@ fun CampusMessageDetailScreen(
                     MessageBody(body, skipTitle = message.title)
                 }
             }
-            Text(
-                "消息来自校园网关，只在本机缓存",
-                style = MaterialTheme.typography.labelSmall,
-                color = colors.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
         }
     }
 }

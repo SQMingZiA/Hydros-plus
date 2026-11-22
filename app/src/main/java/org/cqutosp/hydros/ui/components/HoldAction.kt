@@ -257,6 +257,8 @@ fun HoldActionButton(actionKey: String, enabled: Boolean, working: Boolean, work
     val controller = LocalHoldAction.current
     val haptics = rememberHydrosHaptics()
     val reduceMotion = LocalFeedbackSettings.current.reduceMotionEnabled
+    // 反馈设置里关掉用水动画后，设备不用长按，点一下就开始。
+    val instant = LocalFeedbackSettings.current.waterAnimationDisabled
     var bounds by remember { mutableStateOf(Rect.Zero) }
     var isPressed by remember { mutableStateOf(false) }
     val pressScale by animateFloatAsState(
@@ -292,11 +294,32 @@ fun HoldActionButton(actionKey: String, enabled: Boolean, working: Boolean, work
             .testTag("hold-to-start")
             .semantics(mergeDescendants = true) {
                 role = Role.Button
-                contentDescription = "长按以开始使用，松手取消"
+                contentDescription = if (instant) "点击以开始使用" else "长按以开始使用，松手取消"
                 if (!enabled) disabled()
             }
-            .pointerInput(actionKey, enabled) {
+            .pointerInput(actionKey, enabled, instant) {
                 if (!enabled) return@pointerInput
+                if (instant) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        down.consume()
+                        isPressed = true
+                        try {
+                            var up = false
+                            while (!up) {
+                                val event = awaitPointerEvent()
+                                val pointer = event.changes.find { it.id == down.id }
+                                up = pointer?.pressed != true
+                                event.changes.forEach { it.consume() }
+                            }
+                        } finally {
+                            isPressed = false
+                        }
+                        haptics.light()
+                        if (latestEnabled) latestComplete()
+                    }
+                    return@pointerInput
+                }
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     down.consume()
@@ -319,7 +342,10 @@ fun HoldActionButton(actionKey: String, enabled: Boolean, working: Boolean, work
             }
     ) {
         Box(Modifier.padding(horizontal = 24.dp, vertical = 14.dp), contentAlignment = Alignment.Center) {
-            Text(if (working) workingText else "长按以开始使用", style = MaterialTheme.typography.labelLarge)
+            Text(
+                if (working) workingText else if (instant) "点击以开始使用" else "长按以开始使用",
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }

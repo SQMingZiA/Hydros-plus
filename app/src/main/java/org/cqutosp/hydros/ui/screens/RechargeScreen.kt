@@ -38,7 +38,7 @@ fun RechargeScreen(
     onSubmit: () -> Unit,
     onConsumeOrder: () -> Unit,
     onPaymentResult: (AlipayResult) -> Unit,
-    /** 收款方 / 学校名；网关没有下发厂家信息时退回学校名，两者都没有就不显示。 */
+    /** 运营商家（网关 investorName）；没有下发时退回学校名，两者都没有就不显示。 */
     merchant: String? = null,
 ) {
     LaunchedEffect(Unit) { onOpen() }
@@ -165,7 +165,7 @@ private fun BalanceSection(ui: RechargeUi, onRefresh: () -> Unit, merchant: Stri
                 )
                 if (!merchant.isNullOrBlank()) {
                     Text(
-                        "收款方 · " + merchant,
+                        "运营商家 · " + merchant,
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                     )

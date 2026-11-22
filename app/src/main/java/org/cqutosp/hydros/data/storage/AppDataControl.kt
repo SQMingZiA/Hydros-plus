@@ -9,6 +9,10 @@ import java.io.File
 interface AppDataControl {
     suspend fun sizeBytes(): Long
     fun clearAllData(): Boolean
+    /** 只清理缓存与临时文件，账号、设备、设置与头像都保留。 */
+    fun clearCache(): Boolean
+    /** 缓存目录当前占用，用于在「存储占用情况」里提示可清理的空间。 */
+    suspend fun cacheSizeBytes(): Long = 0L
 }
 
 class AndroidAppDataControl(private val context: Context) : AppDataControl {
@@ -23,4 +27,17 @@ class AndroidAppDataControl(private val context: Context) : AppDataControl {
         }
     }
     override fun clearAllData(): Boolean = context.getSystemService(ActivityManager::class.java).clearApplicationUserData()
+
+    override fun clearCache(): Boolean = runCatching {
+        val roots = (listOf(context.cacheDir) + context.externalCacheDirs.filterNotNull()).distinctBy { it.absolutePath }
+        roots.forEach { root ->
+            root.listFiles()?.forEach { child -> runCatching { child.deleteRecursively() } }
+        }
+        true
+    }.getOrDefault(false)
+
+    override suspend fun cacheSizeBytes(): Long = withContext(Dispatchers.IO) {
+        val roots = (listOf(context.cacheDir) + context.externalCacheDirs.filterNotNull()).distinctBy { it.absolutePath }
+        roots.sumOf { root -> root.walkTopDown().filter { it.isFile }.sumOf { file -> file.length() } }
+    }
 }

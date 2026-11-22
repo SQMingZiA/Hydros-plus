@@ -2,6 +2,9 @@ package org.cqutosp.hydros.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +32,7 @@ import org.cqutosp.hydros.ui.components.Glyph
 import org.cqutosp.hydros.ui.components.PageColumn
 import org.cqutosp.hydros.ui.components.Section
 import org.cqutosp.hydros.ui.components.SubtleDivider
+import org.cqutosp.hydros.ui.components.sectionRowFill
 import org.cqutosp.hydros.ui.components.SwitchRow
 import org.cqutosp.hydros.ui.theme.GradientPreset
 
@@ -69,10 +75,21 @@ fun ThemeColorScreen(
 
 @Composable
 private fun GradientPresetRow(preset: GradientPreset, selected: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val hovered by interaction.collectIsHoveredAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            // 通栏的按下/悬停底色：左右各外扩 20dp，与 PageColumn 的横向内边距对齐。
+            .sectionRowFill(active = true, pressed = pressed, hovered = hovered)
+            .selectable(
+                selected = selected,
+                interactionSource = interaction,
+                indication = null,
+                role = Role.RadioButton,
+                onClick = onClick
+            )
             .heightIn(min = 56.dp)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
