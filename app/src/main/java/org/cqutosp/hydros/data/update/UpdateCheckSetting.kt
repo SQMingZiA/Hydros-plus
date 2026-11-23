@@ -10,6 +10,7 @@ import android.content.SharedPreferences
 object UpdateCheckSetting {
     private const val FILE = "hydros.update"
     private const val KEY = "checkEnabled"
+    private const val DEFAULT_ON_MIGRATION = "defaultOnV147"
 
     @Volatile private var cached = true
     private var prefs: SharedPreferences? = null
@@ -17,7 +18,14 @@ object UpdateCheckSetting {
     fun install(context: Context) {
         val store = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         prefs = store
-        cached = store.getBoolean(KEY, true)
+        // 1.4.7 起自动检测默认开启：老版本可能留下了关闭状态，这里只迁移一次，
+        // 之后用户仍可在开发者页手动关掉。
+        if (!store.getBoolean(DEFAULT_ON_MIGRATION, false)) {
+            store.edit().putBoolean(KEY, true).putBoolean(DEFAULT_ON_MIGRATION, true).apply()
+            cached = true
+        } else {
+            cached = store.getBoolean(KEY, true)
+        }
     }
 
     fun enabled(): Boolean = cached

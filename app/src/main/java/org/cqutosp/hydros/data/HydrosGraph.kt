@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import org.cqutosp.hydros.BuildConfig
 import org.cqutosp.hydros.data.ble.AndroidNearbyScanner
+import org.cqutosp.hydros.data.ble.DevicePresence
 import org.cqutosp.hydros.data.ble.NearbyScanner
 import org.cqutosp.hydros.data.ble.NoNearbyScanner
 import org.cqutosp.hydros.data.network.ApiFailure
@@ -114,16 +115,18 @@ fun createDependencies(app: Application): HydrosDependencies {
         }
     }
 
+    val nearbyScanner = AndroidNearbyScanner(app)
+
     return HydrosDependencies(
         auth = auth,
         account = RealAccountRepository(transport),
         wallet = RealWalletRepository(transport),
-        devices = RealDeviceRepository(transport, store, operation),
+        devices = RealDeviceRepository(transport, store, operation, presenceChecker = DevicePresence(nearbyScanner)),
         sessions = sessions,
         store = store,
         scope = scope,
         ensureWatch = { SessionWatchService.start(app) },
-        nearbyScanner = AndroidNearbyScanner(app),
+        nearbyScanner = nearbyScanner,
         orderPush = { MqttOrderPush() },
         networkRecovery = recovery,
         transport = transport,

@@ -1200,11 +1200,13 @@ internal fun HydrosBottomBar(
     Box(
         Modifier.fillMaxWidth()
             .onSizeChanged { onHeight(it.height + with(density) { 12.dp.roundToPx() }) }
-            .testTag("main-bottom-bar")
+            .testTag("main-bottom-bar"),
+        // 平板等宽屏上胶囊不再拉满整行，改成靠右；手机宽度不足 560dp 时仍铺满。
+        contentAlignment = Alignment.CenterEnd
     ) {
         Row(
             // 给手势条/三键导航留出安全距离，避免玻璃胶囊压住系统的滑动条。
-            Modifier.fillMaxWidth().navigationBarsPadding()
+            Modifier.widthIn(max = 560.dp).fillMaxWidth().navigationBarsPadding()
                 .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)

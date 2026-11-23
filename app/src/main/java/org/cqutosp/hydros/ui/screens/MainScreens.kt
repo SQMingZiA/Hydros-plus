@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -57,8 +58,14 @@ fun HomeScreen(
     onWallet: () -> Unit = {},
     onRefreshFavorites: () -> Unit = {}
 ) {
-    // 回到首页、登录完成或新增收藏时，向网关确认收藏设备是否仍在线。
-    LaunchedEffect(state.signedIn, state.favoriteDeviceIds) { if (state.signedIn) onRefreshFavorites() }
+    // 首页保持可见时定期确认收藏设备是否还在附近：蓝牙广播收不到就置灰，无需等用户操作。
+    LaunchedEffect(state.signedIn, state.favoriteDeviceIds) {
+        if (!state.signedIn) return@LaunchedEffect
+        while (true) {
+            onRefreshFavorites()
+            delay(20_000)
+        }
+    }
     val glassInset = LocalLiquidGlassInset.current
     val connected = state.connectedDeviceIds.mapNotNull { id -> state.devices.find { it.id == id } }
     // 「我的设备」= 收藏过的设备（不再要求它此刻仍处于最近连接），并按收藏顺序展示。

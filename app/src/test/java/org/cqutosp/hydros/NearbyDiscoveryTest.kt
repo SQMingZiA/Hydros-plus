@@ -263,6 +263,7 @@ class NearbyDiscoveryTest {
     private fun lookup(find: suspend (String, String?, Int?) -> DeviceUi) = object : DeviceRepository {
         override suspend fun find(auth: Credentials, mac: String, scanMac: String?, rssi: Int?) = find(mac, scanMac, rssi)
         override suspend fun check(auth: Credentials, device: DeviceUi) = error("not used")
+        override suspend fun presence(devices: List<DeviceUi>): Map<String, Boolean>? = null
         override suspend fun prepare(auth: Credentials, device: DeviceUi) = error("not used")
         override suspend fun release(keepConnection: () -> Boolean) = Unit
     }

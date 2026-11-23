@@ -89,6 +89,8 @@ class HydrosViewModel(
     private var walletGeneration = 0
     /** 收藏设备在线状态的刷新节流，避免每次回到首页都逐台请求网关。 */
     private var favoriteRefreshAt = 0L
+    /** 同一时间只保留一次收藏设备刷新，防止蓝牙扫描与云端查询叠在一起。 */
+    private var favoriteRefreshJob: Job? = null
     private val discovery = NearbyDiscovery(graph.nearbyScanner, graph.devices, graph.auth.credentials, viewModelScope)
     private val preparation = DevicePreparation(
         graph.auth, graph.devices, graph.sessions, graph.store, viewModelScope,
@@ -311,7 +313,7 @@ class HydrosViewModel(
         }
     }
     private fun Throwable?.isDeviceOffline(): Boolean =
-        generateSequence(this) { it.cause }.any { it is DeviceOffline || it is CloudDeviceOffline }
+        generateSequence(this) { it.cause }.any { it is DeviceOffline || it is CloudDeviceOffline || it is DeviceNotNearby }
 
     private fun friendly(error: Exception) = failureFeedback(error, FailureOperation.BILLS).text
     private fun resolveFinishedBill(session: SessionUi) {
@@ -946,10 +948,23 @@ class HydrosViewModel(
         HydrosLog.log("session", "开始使用 " + device.name)
         graph.scope.launch {
             action(operation = FailureOperation.START) {
+                confirmNearby(device)
                 HydrosLog.log("session", "提交开启请求 " + device.deviceId)
                 preparation.startSession(device.id)
             }
         }
+    }
+    /** 开始用水前再确认一次蓝牙广播：连接成功后走远，同样不能开始计费。 */
+    private suspend fun confirmNearby(device: DeviceUi) {
+        if (device.isBle != true) return
+        val presence = runCatching { graph.devices.presence(listOf(device)) }.getOrNull() ?: return
+        if (presence[device.id] != false) return
+        mutable.update { current ->
+            current.copy(devices = current.devices.map {
+                if (it.id == device.id) it.copy(status = DeviceStatus.OFFLINE) else it
+            })
+        }
+        throw DeviceNotNearby()
     }
     fun finish() { if(!state.value.working) graph.scope.launch {
         if (state.value.demoMode) { demoFinish(); return@launch }
@@ -995,24 +1010,46 @@ class HydrosViewModel(
     fun loadMonth(month: String) = billHistory.selectMonth(month)
     fun selectBillType(type: BillType) = billHistory.selectType(type)
 
-    /** 回到首页时刷新收藏设备的在线状态；失败时保留旧快照，不打扰用户。 */
+    /**
+     * 回到首页时刷新收藏设备状态：先用蓝牙广播确认是否还在附近，再按 60 秒节流查询云端。
+     * 离开蓝牙范围立即置为离线；重新出现时马上核实一次在线状态。
+     */
     fun refreshFavoriteDevices() {
         val current = state.value
         if (!current.signedIn || current.demoMode || current.reauthentication != null || current.session != null) return
         val auth = graph.auth.credentials.value ?: return
         val now = System.currentTimeMillis()
-        if (now - favoriteRefreshAt < 60_000) return
+        val cloudDue = now - favoriteRefreshAt >= 60_000
         val targets = current.favoriteDeviceIds.mapNotNull { id -> current.devices.find { it.id == id } }
             .filter { it.status != DeviceStatus.BUSY && it.id !in current.connectedDeviceIds }
         if (targets.isEmpty()) return
-        favoriteRefreshAt = now
-        viewModelScope.launch {
+        if (favoriteRefreshJob?.isActive == true) return
+        if (cloudDue) favoriteRefreshAt = now
+        favoriteRefreshJob = viewModelScope.launch {
+            val presence = runCatching { graph.devices.presence(targets) }.getOrNull()
+            if (graph.auth.credentials.value != auth) return@launch
+            if (presence != null) {
+                mutable.update { latest ->
+                    latest.copy(devices = latest.devices.map { device ->
+                        if (presence[device.id] == false && device.status != DeviceStatus.OFFLINE) {
+                            device.copy(status = DeviceStatus.OFFLINE)
+                        } else device
+                    })
+                }
+            }
+            val returningIds = targets
+                .filter { presence?.get(it.id) == true && it.status == DeviceStatus.OFFLINE }
+                .map { it.id }
+                .toSet()
+            if (!cloudDue && returningIds.isEmpty()) return@launch
             for (device in targets) {
+                if (!cloudDue && device.id !in returningIds) continue
                 try {
                     val fresh = graph.devices.check(auth, device)
                     if (graph.auth.credentials.value != auth) return@launch
                     mutable.update { latest ->
-                        latest.copy(devices = latest.devices.map { if (it.id == fresh.id) fresh else it })
+                        val next = if (presence?.get(fresh.id) == false) fresh.copy(status = DeviceStatus.OFFLINE) else fresh
+                        latest.copy(devices = latest.devices.map { if (it.id == next.id) next else it })
                     }
                 } catch (error: CancellationException) {
                     throw error

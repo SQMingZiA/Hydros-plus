@@ -1,7 +1,10 @@
 package org.cqutosp.hydros.data.repository
 
 import org.cqutosp.hydros.data.feedback.*
+import org.cqutosp.hydros.data.ble.DevicePresence
 import org.cqutosp.hydros.data.ble.MacFormat
+import org.cqutosp.hydros.data.ble.matchesSeen
+import org.cqutosp.hydros.data.ble.nearbyAddresses
 import org.cqutosp.hydros.data.network.*
 import org.cqutosp.hydros.data.storage.HydrosStore
 import org.cqutosp.hydros.ui.state.*
@@ -37,6 +40,8 @@ interface DeviceRepository {
     suspend fun find(auth: Credentials, mac: String, scanMac: String? = null, rssi: Int? = null): DeviceUi
     /** 强制向网关查询一次在线状态，用于刷新收藏设备的快照。 */
     suspend fun check(auth: Credentials, device: DeviceUi): DeviceUi
+    /** 一次性确认一批设备是否出现在附近蓝牙广播中；无法扫描（权限/蓝牙/预览）时返回 null。 */
+    suspend fun presence(devices: List<DeviceUi>): Map<String, Boolean>?
     suspend fun prepare(auth: Credentials, device: DeviceUi): DeviceUi
     suspend fun release(keepConnection: () -> Boolean)
 }
@@ -45,6 +50,7 @@ class RealDeviceRepository(
     private val store: HydrosStore,
     private val operation: Mutex,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val presenceChecker: DevicePresence? = null,
 ) : DeviceRepository {
     private data class DeviceInfoSnapshot(
         val auth: Credentials, val device: DeviceUi, val lookupMac: String, val at: Long,
@@ -66,6 +72,17 @@ class RealDeviceRepository(
             withTimeoutOrNull(DEVICE_INFO_TIMEOUT_MS) { loadInfo(auth, device.ledgerMac, fallbackConnectMac = device.connectMac) }
                 ?: throw NetworkFailure("设备状态查询超时，请稍后重试", SocketTimeoutException())
         }
+
+    override suspend fun presence(devices: List<DeviceUi>): Map<String, Boolean>? {
+        val checker = presenceChecker ?: return null
+        val bleDevices = devices.filter { it.isBle == true }
+        if (bleDevices.isEmpty()) return null
+        val seen = checker.seenMacs() ?: return null
+        return bleDevices.mapNotNull { device ->
+            val addresses = device.nearbyAddresses()
+            if (addresses.isEmpty()) null else device.id to addresses.any { it in seen }
+        }.toMap()
+    }
 
     /** Same-address callers share the successful lookup; cancellation leaves no detached request. */
     private suspend fun findInfo(auth: Credentials, mac: String, scanMac: String? = null,
@@ -148,6 +165,11 @@ class RealDeviceRepository(
                 // 云端没有进行中的订单，但设备本身离线：不能进入 READY，
                 // 否则详情页会出现「使用」按钮并开始一场没有出水的计费。
                 if (fresh.status == DeviceStatus.OFFLINE) throw DeviceOffline()
+                // 云端仍显示可用，但广播里已经收不到设备：说明人已走远，同样不能进入 READY。
+                if (fresh.isBle == true) {
+                    val seen = presenceChecker?.seenMacs()
+                    if (seen != null && !fresh.matchesSeen(seen)) throw DeviceNotNearby()
+                }
                 remember(auth, fresh.copy(channel=ControlChannel.CLOUD, status=DeviceStatus.AVAILABLE))
             }
             RunningOrder.Unknown -> if (response.errorCode == 306) throw CloudDeviceOffline()
