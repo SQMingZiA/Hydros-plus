@@ -1,6 +1,20 @@
 {
-  "generated_at": "2026-11-22T10:36:10Z",
+  "generated_at": "2026-11-23T04:38:03Z",
   "releases": [
+    {
+      "version": "1.4.6",
+      "tag": "v1.4.6",
+      "name": "Hydros+ 1.4.6",
+      "published_at": "2026-11-23T04:38:03Z",
+      "notes": "### Hydros+ 1.4.6 · 2026-11-23\n\n> 收藏设备离线时自动同步为离线，离线设备详情页的「使用」按钮置灰；账单详情去重；附近设备底部不再被悬浮导航栏遮挡。\n\n#### 修复\n- **收藏设备离线状态**：进入首页、回到前台或收藏变化时刷新收藏设备的在线状态；连接时发现设备已离线也会把列表状态同步为「离线」。\n- **离线设备使用入口**：详情页在设备离线时显示置灰的「使用」按钮，仍可查看详情、收藏和设置备注。\n- **附近设备与导航栏重叠**：首页底部按悬浮导航栏高度留白，附近设备最后一条与「重新扫描」不再被遮挡。\n\n#### 变更\n- **账单详情**：移除与头部重复的「项目」「位置」，消费日期与时间同日时不再重复展示。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.4.6-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.4.5...v1.4.6\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>\n",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.4.6-release.apk",
+          "size": 16475860,
+          "sha256": "d6dc10e75a6c9517d10032e195720f7abf7122ef87491d1b5380c1de3b3d0984"
+        }
+      ]
+    },
     {
       "version": "1.4.5",
       "tag": "v1.4.5",
