@@ -61,6 +61,8 @@ internal fun createUiPreviewDependencies(context: Context, billCount: Int = 2): 
             override suspend fun find(auth: Credentials, mac: String, scanMac: String?, rssi: Int?) =
                 previewDevices.firstOrNull { it.ledgerMac.equals(mac.replace(":", "").replace("-", ""), true) }
                     ?: throw ApiFailure(null, "UI 预览中只提供本地示例设备")
+            override suspend fun check(auth: Credentials, device: DeviceUi) =
+                previewDevices.firstOrNull { it.id == device.id } ?: device
             override suspend fun prepare(auth: Credentials, device: DeviceUi) = device
             override suspend fun release(keepConnection: () -> Boolean) = Unit
         },

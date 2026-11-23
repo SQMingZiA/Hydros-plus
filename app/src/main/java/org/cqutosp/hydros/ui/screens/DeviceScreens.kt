@@ -146,6 +146,9 @@ fun DeviceDetailScreen(device: DeviceUi?, state: HydrosUiState, onConnect: (Devi
             }
             when {
                 state.session != null -> PrimaryAction("进入使用页面", onClick = onSession)
+                // 离线设备仍可查看详情与备注，但不再提供连接/使用入口。
+                device.status == DeviceStatus.OFFLINE ->
+                    PrimaryAction("使用", enabled = false, disabledReason = "设备当前离线，暂时无法使用") {}
                 state.connectingId == device.id && state.connectionStage == ConnectionStage.CONNECTING -> StateCard("正在连接",
                     state.networkMessage ?: state.connectionMessage ?: "正在核实云端连接…", loading = true)
                 state.connectingId == device.id && state.connectionStage == ConnectionStage.FAILED -> {
@@ -160,8 +163,6 @@ fun DeviceDetailScreen(device: DeviceUi?, state: HydrosUiState, onConnect: (Devi
                     if (device.status == DeviceStatus.BUSY) PrimaryAction("核实并恢复本人订单", enabled = !state.working, loading = state.working) { onStart(device) }
                     else HoldActionButton(device.id, enabled = !state.working, working = state.working) { onStart(device) }
                 }
-                // 离线设备无论走云端还是蓝牙，都不再提供「连接设备」/「使用」入口。
-                device.status == DeviceStatus.OFFLINE -> SecondaryAction("返回", onClick = onBack)
                 else -> PrimaryAction("连接设备") { onConnect(device) }
             }
         }

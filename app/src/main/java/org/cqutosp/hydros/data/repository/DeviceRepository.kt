@@ -35,6 +35,8 @@ fun qrMac(raw: String): String? {
 }
 interface DeviceRepository {
     suspend fun find(auth: Credentials, mac: String, scanMac: String? = null, rssi: Int? = null): DeviceUi
+    /** 强制向网关查询一次在线状态，用于刷新收藏设备的快照。 */
+    suspend fun check(auth: Credentials, device: DeviceUi): DeviceUi
     suspend fun prepare(auth: Credentials, device: DeviceUi): DeviceUi
     suspend fun release(keepConnection: () -> Boolean)
 }
@@ -58,6 +60,12 @@ class RealDeviceRepository(
     override suspend fun find(auth: Credentials, mac: String, scanMac: String?, rssi: Int?): DeviceUi =
         failureBoundary(FailureOperation.SCAN, FailureStage.DEVICE_INFO) { withTimeoutOrNull(DEVICE_INFO_TIMEOUT_MS) { findInfo(auth, mac, scanMac, rssi) }
             ?: throw NetworkFailure("设备查询超时，可重新查询，无需再次扫码", SocketTimeoutException()) }
+
+    override suspend fun check(auth: Credentials, device: DeviceUi): DeviceUi =
+        failureBoundary(FailureOperation.SCAN, FailureStage.DEVICE_INFO) {
+            withTimeoutOrNull(DEVICE_INFO_TIMEOUT_MS) { loadInfo(auth, device.ledgerMac, fallbackConnectMac = device.connectMac) }
+                ?: throw NetworkFailure("设备状态查询超时，请稍后重试", SocketTimeoutException())
+        }
 
     /** Same-address callers share the successful lookup; cancellation leaves no detached request. */
     private suspend fun findInfo(auth: Credentials, mac: String, scanMac: String? = null,

@@ -87,6 +87,8 @@ class HydrosViewModel(
     private var demoSession: SessionUi? = null
     private val billHistory = BillHistory(graph.wallet, graph.auth.credentials, viewModelScope)
     private var walletGeneration = 0
+    /** 收藏设备在线状态的刷新节流，避免每次回到首页都逐台请求网关。 */
+    private var favoriteRefreshAt = 0L
     private val discovery = NearbyDiscovery(graph.nearbyScanner, graph.devices, graph.auth.credentials, viewModelScope)
     private val preparation = DevicePreparation(
         graph.auth, graph.devices, graph.sessions, graph.store, viewModelScope,
@@ -282,10 +284,18 @@ class HydrosViewModel(
         }
         viewModelScope.launch {
             preparation.state.collect { connection ->
+                val ready = connection.device?.takeIf { connection.stage == ConnectionStage.READY }
+                // 连接校验才发现设备离线时，把列表快照同步为离线，详情页才能显示灰色的使用按钮。
+                val offline = connection.device?.takeIf {
+                    connection.stage == ConnectionStage.FAILED && connection.error.isDeviceOffline()
+                }
                 mutable.update { current ->
-                    val ready = connection.device?.takeIf { connection.stage == ConnectionStage.READY }
-                    val devices = if (ready == null) current.devices else {
-                        current.devices.filterNot { it.id == ready.id } + ready
+                    val devices = when {
+                        ready != null -> current.devices.filterNot { it.id == ready.id } + ready
+                        offline != null -> current.devices.map {
+                            if (it.id == offline.id) it.copy(status = DeviceStatus.OFFLINE) else it
+                        }
+                        else -> current.devices
                     }
                     current.copy(
                         connectingId = connection.device?.id,
@@ -300,6 +310,9 @@ class HydrosViewModel(
             }
         }
     }
+    private fun Throwable?.isDeviceOffline(): Boolean =
+        generateSequence(this) { it.cause }.any { it is DeviceOffline || it is CloudDeviceOffline }
+
     private fun friendly(error: Exception) = failureFeedback(error, FailureOperation.BILLS).text
     private fun resolveFinishedBill(session: SessionUi) {
         viewModelScope.launch {
@@ -791,6 +804,12 @@ class HydrosViewModel(
         }
     }
     fun connect(device: DeviceUi) {
+        // 离线设备只允许查看详情：不建立连接，也不进入演示计费。
+        if (device.status == DeviceStatus.OFFLINE) {
+            preparation.cancel()
+            mutable.update { it.copy(deviceActionError = null) }
+            return
+        }
         if (state.value.demoMode) {
             demoConnect(device)
             return
@@ -975,6 +994,34 @@ class HydrosViewModel(
     }
     fun loadMonth(month: String) = billHistory.selectMonth(month)
     fun selectBillType(type: BillType) = billHistory.selectType(type)
+
+    /** 回到首页时刷新收藏设备的在线状态；失败时保留旧快照，不打扰用户。 */
+    fun refreshFavoriteDevices() {
+        val current = state.value
+        if (!current.signedIn || current.demoMode || current.reauthentication != null || current.session != null) return
+        val auth = graph.auth.credentials.value ?: return
+        val now = System.currentTimeMillis()
+        if (now - favoriteRefreshAt < 60_000) return
+        val targets = current.favoriteDeviceIds.mapNotNull { id -> current.devices.find { it.id == id } }
+            .filter { it.status != DeviceStatus.BUSY && it.id !in current.connectedDeviceIds }
+        if (targets.isEmpty()) return
+        favoriteRefreshAt = now
+        viewModelScope.launch {
+            for (device in targets) {
+                try {
+                    val fresh = graph.devices.check(auth, device)
+                    if (graph.auth.credentials.value != auth) return@launch
+                    mutable.update { latest ->
+                        latest.copy(devices = latest.devices.map { if (it.id == fresh.id) fresh else it })
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    // 单台查询失败不影响其他收藏设备，保留原有的离线/可用状态。
+                }
+            }
+        }
+    }
 
     private val messageRepository: org.cqutosp.hydros.data.messages.MessageRepository? by lazy {
         graph.transport?.let { org.cqutosp.hydros.data.messages.RealMessageRepository(it) }

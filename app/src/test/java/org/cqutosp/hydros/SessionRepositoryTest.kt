@@ -97,9 +97,9 @@ class SessionRepositoryTest {
         }
         val s=MemoryStore(); val t=ScriptTransport()
         t.script={path,_-> if(path=="device/info/mac") response("""{"deviceId":7,"deviceName":"热水表-宿舍","snCode":"AABBCCDDEEFF","macAddress":"AABBCCDDEEFF","smallTypeId":1,"onlineStatusId":0}""") else response() }
-        val ready=RealDeviceRepository(t,s,Mutex()).prepare(auth,device(ControlChannel.UNKNOWN))
-        assertEquals(ControlChannel.CLOUD,ready.channel)
-        assertEquals(DeviceStatus.OFFLINE,ready.status)
+        // 离线设备不允许进入 READY，否则详情页会给出可用的开始入口。
+        val failure=runCatching { RealDeviceRepository(t,s,Mutex()).prepare(auth,device(ControlChannel.UNKNOWN)) }.exceptionOrNull()
+        assertTrue(failure is DeviceOffline)
     }
     @Test fun rememberedBleAndIsBleStillUseCloudWhenStatusQuerySucceeds() = runTest {
         val store = MemoryStore()

@@ -340,6 +340,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                 val current = nav.currentBackStackEntry
                 val deviceId = current?.arguments?.getString("id")
                 model.recoverQueries(deviceId.takeIf { current?.destination?.route == "bill/{id}" })
+                if (current?.destination?.route == "home") model.refreshFavoriteDevices()
                 appInfo.onUpdateResumed()
                 if (bluetoothGranted() && current?.destination?.route == "device/{id}" && deviceId != null) {
                     val pending = permissionTarget?.takeIf { it.id == deviceId }
@@ -495,6 +496,7 @@ fun HydrosApp(model: HydrosViewModel = hydrosViewModel(), appInfo: AppInfoViewMo
                                         onSession = { openPage("session") },
                                         onWaterReport = { openPage("water/report") },
                                         onWallet = { openPage("wallet") },
+                                        onRefreshFavorites = model::refreshFavoriteDevices,
                                         onScanNearby = model::discoverNearby, onStopNearby = model::stopDiscovery)
                                     else WalletScreen(state, onMonth = model::loadMonth,
                                         onBillType = model::selectBillType,

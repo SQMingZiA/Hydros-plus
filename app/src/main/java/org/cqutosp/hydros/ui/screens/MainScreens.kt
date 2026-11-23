@@ -54,8 +54,12 @@ fun HomeScreen(
     onStopNearby: () -> Unit,
     onNearbyDevice: (String) -> Unit = onDevice,
     onWaterReport: () -> Unit = {},
-    onWallet: () -> Unit = {}
+    onWallet: () -> Unit = {},
+    onRefreshFavorites: () -> Unit = {}
 ) {
+    // 回到首页、登录完成或新增收藏时，向网关确认收藏设备是否仍在线。
+    LaunchedEffect(state.signedIn, state.favoriteDeviceIds) { if (state.signedIn) onRefreshFavorites() }
+    val glassInset = LocalLiquidGlassInset.current
     val connected = state.connectedDeviceIds.mapNotNull { id -> state.devices.find { it.id == id } }
     // 「我的设备」= 收藏过的设备（不再要求它此刻仍处于最近连接），并按收藏顺序展示。
     val favorites = remember(state.devices, state.connectedDeviceIds, state.favoriteDeviceIds) {
@@ -79,7 +83,8 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .imePadding()
                 .padding(horizontal = 20.dp)
-                .padding(top = 6.dp, bottom = 28.dp)
+                // 底部导航悬浮在内容之上，列表末尾必须让出玻璃高度，否则最后一条会被压住。
+                .padding(top = 6.dp, bottom = glassInset + 24.dp)
         ) {
             HomeHeader(
                 dateLabel = todayLabel(),
@@ -633,18 +638,15 @@ fun BillDetailScreen(
                 if (bill.recharge) {
                     InfoRow("支付方式", bill.location.ifBlank { "—" })
                     SubtleDivider()
-                } else {
-                    InfoRow("项目", bill.title)
-                    SubtleDivider()
-                    InfoRow("位置", bill.location.ifBlank { "—" })
-                    SubtleDivider()
                 }
+                // 项目与位置已在账单头部展示，这里不再重复一次。
                 InfoRow("时间", bill.time.toLocalDate().toString() + " " + bill.time.toLocalTime().withNano(0))
                 if (!bill.recharge && (bill.durationText != null || durationPending)) {
                     SubtleDivider()
                     InfoRow("使用时长", bill.durationText ?: "查询中…")
                 }
-                if (!bill.recharge && bill.consumeDate.isNotBlank()) {
+                // 消费日期与时间同一天时只保留时间，避免同一日期出现两次。
+                if (!bill.recharge && bill.consumeDate.isNotBlank() && bill.consumeDate.take(10) != bill.time.toLocalDate().toString()) {
                     SubtleDivider()
                     InfoRow("消费日期", bill.consumeDate.take(10))
                 }
