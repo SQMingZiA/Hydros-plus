@@ -1,6 +1,20 @@
 {
-  "generated_at": "2026-11-23T04:38:03Z",
+  "generated_at": "2026-11-23T06:45:33Z",
   "releases": [
+    {
+      "version": "1.4.7",
+      "tag": "v1.4.7",
+      "name": "Hydros+ 1.4.7",
+      "published_at": "2026-11-23T06:45:33Z",
+      "notes": "### Hydros+ 1.4.7 · 2026-11-23\n\n> 收藏设备走出蓝牙范围后同步显示离线并阻止开始用水；平板宽屏下底部导航栏收窄靠右；自动检查更新默认开启。\n\n#### 修复\n- **蓝牙离线状态**：收藏设备离开蓝牙广播范围后，首页与详情页会把状态更新为「离线」，「使用」按钮同步置灰；连接与开始用水前都会再次确认设备在附近，避免连接成功后又走远仍能开启。\n- **自动检查更新**：升级到本版本后默认重新开启启动时检查更新，仍可在开发者页手动关闭。\n\n#### 变更\n- **平板底部导航**：宽屏设备上底部导航胶囊最大宽度收窄到 560dp 并靠右显示，普通手机保持铺满现状。\n\n---\n\n**下载**：下方 Assets 中的 Hydros-plus-1.4.7-release.apk（arm64-v8a，Android 12 及以上，直接覆盖安装即可保留数据）\n\n**完整更新日志**：https://github.com/SQMingZiA/Hydros-plus/blob/main/CHANGELOG.md\n**版本对比**：https://github.com/SQMingZiA/Hydros-plus/compare/v1.4.6...v1.4.7\n\n<sub>使用码 / 绑定寝室 / 充值 移植自 muguang 与 quzhi-campus-third-party，逻辑集中在 thirdparty 包。</sub>\n",
+      "assets": [
+        {
+          "name": "Hydros-plus-1.4.7-release.apk",
+          "size": 16475860,
+          "sha256": "69c5e24ff5d3bf2732e134815535776479d8bf72302ba208ed72a3a849fc64d0"
+        }
+      ]
+    },
     {
       "version": "1.4.6",
       "tag": "v1.4.6",
